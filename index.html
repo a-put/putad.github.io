@@ -71,12 +71,27 @@
     <!-- About -->
     <section id="about" class="tab-section">
       <h2 class="text-3xl font-medium mb-6">About</h2>
-      <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 max-w-3xl">
-        <p class="text-gray-600 leading-relaxed">
-         Senior Researcher in hybrid photonics and quantum optics with a focus on real-time control of polaritonic states and optical computing 
-          technologies. Proven leadership in R&D, grant-winning innovation, and high-impact publications (PRL, Nature Comms). Passionate about 
-          scientific research, innovation, and the development of future technologies.
-        </p>
+      <div class="grid md:grid-cols-2 gap-8 items-start">
+        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8">
+          <p class="text-gray-600 leading-relaxed">
+           Senior Researcher in hybrid photonics and quantum optics with a focus on real-time control of polaritonic states and optical computing 
+            technologies. Proven leadership in R&D, grant-winning innovation, and high-impact publications (PRL, Nature Comms). Passionate about 
+            scientific research, innovation, and the development of future technologies.
+          </p>
+        </div>
+        
+        <!-- Tetris Game -->
+        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-medium">Take a Break</h3>
+            <div class="text-sm text-gray-600">Score: <span id="score">0</span></div>
+          </div>
+          <canvas id="tetris" width="240" height="400" class="border-2 border-gray-300 rounded-lg mx-auto block bg-white"></canvas>
+          <div class="mt-4 text-center text-sm text-gray-500">
+            <p>← → Move | ↑ Rotate | ↓ Drop</p>
+            <button id="restart" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">New Game</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -143,8 +158,8 @@
     <section id="media" class="tab-section hidden">
       <h2 class="text-3xl font-medium mb-6">Media Highlights</h2>
       <div class="space-y-4 max-w-3xl">
-        <div class="p-6 rounded-2xl border bg-gray-50">Interview — Publication</div>
-        <div class="p-6 rounded-2xl border bg-gray-50">Podcast — Show Name</div>
+        <div class="p-6 rounded-2xl border bg-gray-50">Interview – Publication</div>
+        <div class="p-6 rounded-2xl border bg-gray-50">Podcast – Show Name</div>
       </div>
     </section>
 
@@ -167,8 +182,8 @@
     <section id="talks" class="tab-section hidden">
       <h2 class="text-3xl font-medium mb-6">Talks & Keynotes</h2>
       <ul class="space-y-4 max-w-3xl">
-        <li class="p-6 rounded-2xl border bg-gray-50">Conference Talk — Event, Year</li>
-        <li class="p-6 rounded-2xl border bg-gray-50">Keynote — Event, Year</li>
+        <li class="p-6 rounded-2xl border bg-gray-50">Conference Talk – Event, Year</li>
+        <li class="p-6 rounded-2xl border bg-gray-50">Keynote – Event, Year</li>
       </ul>
     </section>
 
@@ -204,6 +219,183 @@
         document.getElementById(btn.dataset.tab).classList.remove('hidden');
       });
     });
+
+    // Tetris Game
+    const canvas = document.getElementById('tetris');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const restartBtn = document.getElementById('restart');
+    
+    const BLOCK_SIZE = 20;
+    const COLS = 12;
+    const ROWS = 20;
+    
+    const SHAPES = [
+      [[1,1,1,1]], // I
+      [[1,1],[1,1]], // O
+      [[0,1,0],[1,1,1]], // T
+      [[1,0,0],[1,1,1]], // L
+      [[0,0,1],[1,1,1]], // J
+      [[0,1,1],[1,1,0]], // S
+      [[1,1,0],[0,1,1]]  // Z
+    ];
+    
+    const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+    
+    let board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+    let score = 0;
+    let currentPiece = null;
+    let gameInterval = null;
+    let isPaused = false;
+    
+    function newPiece() {
+      const shapeIndex = Math.floor(Math.random() * SHAPES.length);
+      return {
+        shape: SHAPES[shapeIndex],
+        color: COLORS[shapeIndex],
+        x: Math.floor(COLS / 2) - 1,
+        y: 0
+      };
+    }
+    
+    function drawBlock(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+    }
+    
+    function drawBoard() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          if (board[y][x]) {
+            drawBlock(x, y, board[y][x]);
+          }
+        }
+      }
+    }
+    
+    function drawPiece() {
+      currentPiece.shape.forEach((row, dy) => {
+        row.forEach((cell, dx) => {
+          if (cell) {
+            drawBlock(currentPiece.x + dx, currentPiece.y + dy, currentPiece.color);
+          }
+        });
+      });
+    }
+    
+    function collision() {
+      return currentPiece.shape.some((row, dy) => {
+        return row.some((cell, dx) => {
+          if (!cell) return false;
+          const newX = currentPiece.x + dx;
+          const newY = currentPiece.y + dy;
+          return newX < 0 || newX >= COLS || newY >= ROWS || (newY >= 0 && board[newY][newX]);
+        });
+      });
+    }
+    
+    function merge() {
+      currentPiece.shape.forEach((row, dy) => {
+        row.forEach((cell, dx) => {
+          if (cell) {
+            const y = currentPiece.y + dy;
+            const x = currentPiece.x + dx;
+            if (y >= 0) board[y][x] = currentPiece.color;
+          }
+        });
+      });
+    }
+    
+    function clearLines() {
+      let linesCleared = 0;
+      for (let y = ROWS - 1; y >= 0; y--) {
+        if (board[y].every(cell => cell !== 0)) {
+          board.splice(y, 1);
+          board.unshift(Array(COLS).fill(0));
+          linesCleared++;
+          y++;
+        }
+      }
+      if (linesCleared > 0) {
+        score += linesCleared * 100;
+        scoreElement.textContent = score;
+      }
+    }
+    
+    function rotate() {
+      const rotated = currentPiece.shape[0].map((_, i) =>
+        currentPiece.shape.map(row => row[i]).reverse()
+      );
+      const prevShape = currentPiece.shape;
+      currentPiece.shape = rotated;
+      if (collision()) {
+        currentPiece.shape = prevShape;
+      }
+    }
+    
+    function move(dx, dy) {
+      currentPiece.x += dx;
+      currentPiece.y += dy;
+      if (collision()) {
+        currentPiece.x -= dx;
+        currentPiece.y -= dy;
+        if (dy > 0) {
+          merge();
+          clearLines();
+          currentPiece = newPiece();
+          if (collision()) {
+            gameOver();
+          }
+        }
+      }
+    }
+    
+    function gameOver() {
+      clearInterval(gameInterval);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+    }
+    
+    function update() {
+      if (!isPaused) {
+        move(0, 1);
+        drawBoard();
+        drawPiece();
+      }
+    }
+    
+    function startGame() {
+      board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+      score = 0;
+      scoreElement.textContent = score;
+      currentPiece = newPiece();
+      clearInterval(gameInterval);
+      gameInterval = setInterval(update, 500);
+      isPaused = false;
+      drawBoard();
+      drawPiece();
+    }
+    
+    document.addEventListener('keydown', e => {
+      if (!currentPiece || isPaused) return;
+      if (e.key === 'ArrowLeft') move(-1, 0);
+      if (e.key === 'ArrowRight') move(1, 0);
+      if (e.key === 'ArrowDown') move(0, 1);
+      if (e.key === 'ArrowUp') rotate();
+      drawBoard();
+      drawPiece();
+    });
+    
+    restartBtn.addEventListener('click', startGame);
+    
+    startGame();
   </script>
 
 </body>
