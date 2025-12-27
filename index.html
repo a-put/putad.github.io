@@ -41,11 +41,31 @@
   <main class="pt-32 max-w-6xl mx-auto px-6">
 
     <!-- Hero -->
-    <section class="mb-24">
-      <h1 class="text-5xl font-semibold tracking-tight mb-6">Design. Research. Impact.</h1>
-      <p class="text-xl text-gray-500 max-w-2xl">
-        Short, elegant professional statement. Apple-style: calm confidence, no clutter.
-      </p>
+    <section class="mb-24 grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <h1 class="text-5xl font-semibold tracking-tight mb-6">Design. Research. Impact.</h1>
+        <p class="text-xl text-gray-500 max-w-xl">
+          Short, elegant professional statement. Apple-style: calm confidence, no clutter.
+        </p>
+      </div>
+
+      <!-- Profile Photo -->
+      <div class="flex justify-center md:justify-end">
+        <div class="relative group">
+          <!-- Gradient Halo -->
+          <div class="absolute -inset-4 rounded-[32px] bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-pink-500/20 blur-2xl opacity-70"></div>
+
+          <!-- Photo Card -->
+          <img
+            src="photo.jpg"
+            alt="Your Name portrait"
+            class="relative w-72 h-72 object-cover rounded-[28px] border border-gray-200 shadow-md transition-transform duration-500 ease-out group-hover:scale-[1.02]"
+          />
+
+          <!-- Subtle Edge Ring -->
+          <div class="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-black/5"></div>
+        </div>
+      </div>
     </section>
 
     <!-- About -->
