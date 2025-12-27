@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Name – Portfolio</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Framer Motion (UMD) -->
+  <script src="https://unpkg.com/framer-motion/dist/framer-motion.umd.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .glass {
+      backdrop-filter: saturate(180%) blur(20px);
+      background: rgba(255, 255, 255, 0.75);
+    }
+  </style>
+</head>
+<body class="bg-white text-gray-900">
+
+  <!-- Top Navigation -->
+  <header class="fixed top-0 inset-x-0 z-50 glass border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+      <span class="font-semibold tracking-tight">Your Name</span>
+      <nav class="flex gap-6 text-sm">
+        <button data-tab="about" class="tab-btn text-gray-900">About</button>
+        <button data-tab="publications" class="tab-btn text-gray-500">Publications</button>
+        <button data-tab="media" class="tab-btn text-gray-500">Media</button>
+        <button data-tab="projects" class="tab-btn text-gray-500">Projects</button>
+        <button data-tab="talks" class="tab-btn text-gray-500">Talks</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="pt-32 max-w-6xl mx-auto px-6">
+
+    <!-- Hero -->
+    <section class="mb-24">
+      <h1 class="text-5xl font-semibold tracking-tight mb-6">Design. Research. Impact.</h1>
+      <p class="text-xl text-gray-500 max-w-2xl">
+        Short, elegant professional statement. Apple-style: calm confidence, no clutter.
+      </p>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="tab-section">
+      <h2 class="text-3xl font-medium mb-6">About</h2>
+      <div class="bg-gray-50 border border-gray-200 rounded-2xl p-8 max-w-3xl">
+        <p class="text-gray-600 leading-relaxed">
+          Expanded bio. Describe your background, current role, and interests. This space works well for a narrative rather than a résumé dump.
+        </p>
+      </div>
+    </section>
+
+    <!-- Publications -->
+    <section id="publications" class="tab-section hidden">
+      <h2 class="text-3xl font-medium mb-6">Publications</h2>
+      <div class="space-y-4 max-w-3xl">
+        <div class="p-6 rounded-2xl border bg-gray-50">Title of Paper — <span class="text-gray-500">Journal, Year</span></div>
+        <div class="p-6 rounded-2xl border bg-gray-50">Book or Essay — <span class="text-gray-500">Publisher, Year</span></div>
+      </div>
+    </section>
+
+    <!-- Media -->
+    <section id="media" class="tab-section hidden">
+      <h2 class="text-3xl font-medium mb-6">Media Highlights</h2>
+      <div class="space-y-4 max-w-3xl">
+        <div class="p-6 rounded-2xl border bg-gray-50">Interview — Publication</div>
+        <div class="p-6 rounded-2xl border bg-gray-50">Podcast — Show Name</div>
+      </div>
+    </section>
+
+    <!-- Projects -->
+    <section id="projects" class="tab-section hidden">
+      <h2 class="text-3xl font-medium mb-6">Selected Projects</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="rounded-2xl border bg-gray-50 p-6">
+          <h3 class="font-medium mb-2">Project One</h3>
+          <p class="text-gray-500">Short description with outcome or impact.</p>
+        </div>
+        <div class="rounded-2xl border bg-gray-50 p-6">
+          <h3 class="font-medium mb-2">Project Two</h3>
+          <p class="text-gray-500">Short description with outcome or impact.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Talks -->
+    <section id="talks" class="tab-section hidden">
+      <h2 class="text-3xl font-medium mb-6">Talks & Keynotes</h2>
+      <ul class="space-y-4 max-w-3xl">
+        <li class="p-6 rounded-2xl border bg-gray-50">Conference Talk — Event, Year</li>
+        <li class="p-6 rounded-2xl border bg-gray-50">Keynote — Event, Year</li>
+      </ul>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-32 py-12 border-t flex justify-between items-center">
+      <span class="text-sm text-gray-500">© Your Name</span>
+      <div class="flex gap-5">
+        <!-- SVG Icons -->
+        <a href="https://linkedin.com/in/yourprofile" aria-label="LinkedIn" class="hover:opacity-70">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5C4.98 4.88 3.87 6 2.5 6S0 4.88 0 3.5 1.11 1 2.48 1s2.5 1.12 2.5 2.5zM0 24h5V7H0v17zm7.5-17h4.8v2.3h.07c.67-1.27 2.3-2.6 4.73-2.6 5.05 0 5.98 3.3 5.98 7.6V24h-5v-8.4c0-2-.04-4.6-2.8-4.6-2.8 0-3.2 2.2-3.2 4.4V24h-5V7z"/></svg>
+        </a>
+        <a href="https://instagram.com/yourprofile" aria-label="Instagram" class="hover:opacity-70">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2c3.2 0 3.6 0 4.8.07 1.17.06 1.96.24 2.42.4.61.23 1.05.5 1.5.95.45.45.72.89.95 1.5.16.46.34 1.25.4 2.42.07 1.2.07 1.6.07 4.8s0 3.6-.07 4.8c-.06 1.17-.24 1.96-.4 2.42-.23.61-.5 1.05-.95 1.5-.45.45-.89.72-1.5.95-.46.16-1.25.34-2.42.4-1.2.07-1.6.07-4.8.07s-3.6 0-4.8-.07c-1.17-.06-1.96-.24-2.42-.4-.61-.23-1.05-.5-1.5-.95-.45-.45-.72-.89-.95-1.5-.16-.46-.34-1.25-.4-2.42C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.8c.06-1.17.24-1.96.4-2.42.23-.61.5-1.05.95-1.5.45-.45.89-.72 1.5-.95.46-.16 1.25-.34 2.42-.4C8.4 2.2 8.8 2.2 12 2.2zm0 3.6a6.2 6.2 0 100 12.4 6.2 6.2 0 000-12.4zm6.4-.9a1.45 1.45 0 11-2.9 0 1.45 1.45 0 012.9 0z"/></svg>
+        </a>
+        <a href="https://t.me/yourprofile" aria-label="Telegram" class="hover:opacity-70">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.44l-.39 5.52c.56 0 .8-.24 1.1-.53l2.64-2.52 5.47 4.01c1 .55 1.7.26 1.95-.93L23.9 3.94c.32-1.45-.52-2.02-1.48-1.67L1.1 10.13c-1.42.55-1.4 1.33-.26 1.68l5.48 1.71L19.2 5.7c.6-.4 1.16-.18.7.22"/></svg>
+        </a>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- Tabs Logic -->
+  <script>
+    const buttons = document.querySelectorAll('.tab-btn');
+    const sections = document.querySelectorAll('.tab-section');
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.replace('text-gray-900', 'text-gray-500'));
+        btn.classList.replace('text-gray-500', 'text-gray-900');
+        sections.forEach(s => s.classList.add('hidden'));
+        document.getElementById(btn.dataset.tab).classList.remove('hidden');
+      });
+    });
+  </script>
+
+</body>
+</html>
