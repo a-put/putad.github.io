@@ -88,8 +88,11 @@
           </div>
           <canvas id="tetris" width="240" height="400" class="border-2 border-gray-300 rounded-lg mx-auto block bg-white"></canvas>
           <div class="mt-4 text-center text-sm text-gray-500">
-            <p>← → Move | ↑ Rotate | ↓ Drop</p>
-            <button id="restart" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">New Game</button>
+            <p>← → Move | ↑ Rotate | ↓ Drop | Space Pause</p>
+            <div class="flex gap-2 justify-center mt-2">
+              <button id="pause" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">Pause</button>
+              <button id="restart" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">New Game</button>
+            </div>
           </div>
         </div>
       </div>
@@ -225,6 +228,7 @@
     const ctx = canvas.getContext('2d');
     const scoreElement = document.getElementById('score');
     const restartBtn = document.getElementById('restart');
+    const pauseBtn = document.getElementById('pause');
     
     const BLOCK_SIZE = 20;
     const COLS = 12;
@@ -371,6 +375,15 @@
       }
     }
     
+    function togglePause() {
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+      if (!isPaused) {
+        drawBoard();
+        drawPiece();
+      }
+    }
+    
     function startGame() {
       board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
       score = 0;
@@ -379,12 +392,22 @@
       clearInterval(gameInterval);
       gameInterval = setInterval(update, 500);
       isPaused = false;
+      pauseBtn.textContent = 'Pause';
       drawBoard();
       drawPiece();
     }
     
     document.addEventListener('keydown', e => {
-      if (!currentPiece || isPaused) return;
+      if (!currentPiece) return;
+      
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
+      
+      if (isPaused) return;
+      
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         move(-1, 0);
@@ -405,6 +428,7 @@
       drawPiece();
     });
     
+    pauseBtn.addEventListener('click', togglePause);
     restartBtn.addEventListener('click', startGame);
     
     startGame();
