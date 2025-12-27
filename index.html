@@ -90,8 +90,9 @@
           <div class="mt-4 text-center text-sm text-gray-500">
             <p>← → Move | ↑ Rotate | ↓ Drop | Space Pause</p>
             <div class="flex gap-2 justify-center mt-2">
-              <button id="pause" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">Pause</button>
-              <button id="restart" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">New Game</button>
+              <button id="start" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">Start</button>
+              <button id="pause" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition disabled:opacity-50" disabled>Pause</button>
+              <button id="restart" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50" disabled>New Game</button>
             </div>
           </div>
         </div>
@@ -260,6 +261,7 @@
     const scoreElement = document.getElementById('score');
     const restartBtn = document.getElementById('restart');
     const pauseBtn = document.getElementById('pause');
+    const startBtn = document.getElementById('start');
     
     const BLOCK_SIZE = 20;
     const COLS = 12;
@@ -282,6 +284,7 @@
     let currentPiece = null;
     let gameInterval = null;
     let isPaused = false;
+    let gameStarted = false;
     
     function newPiece() {
       const shapeIndex = Math.floor(Math.random() * SHAPES.length);
@@ -423,13 +426,18 @@
       clearInterval(gameInterval);
       gameInterval = setInterval(update, 500);
       isPaused = false;
+      gameStarted = true;
       pauseBtn.textContent = 'Pause';
+      pauseBtn.disabled = false;
+      restartBtn.disabled = false;
+      startBtn.disabled = true;
+      startBtn.classList.add('opacity-50');
       drawBoard();
       drawPiece();
     }
     
     document.addEventListener('keydown', e => {
-      if (!currentPiece) return;
+      if (!gameStarted || !currentPiece) return;
       
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
@@ -461,8 +469,21 @@
     
     pauseBtn.addEventListener('click', togglePause);
     restartBtn.addEventListener('click', startGame);
+    startBtn.addEventListener('click', startGame);
     
-    startGame();
+    // Show initial start screen instead of auto-starting
+    function showStartScreen() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#374151';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('TETRIS', canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = '16px sans-serif';
+      ctx.fillText('Press Start to Play', canvas.width / 2, canvas.height / 2 + 20);
+    }
+    
+    showStartScreen();
   </script>
 
 </body>
