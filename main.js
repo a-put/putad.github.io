@@ -65,6 +65,8 @@ function setupMobileTabs() {
         document.querySelectorAll('.tab-btn').forEach(b => {
           b.classList.toggle('active', b.dataset.tab === id);
         });
+        const activeBtn = nav.querySelector(`.tab-btn[data-tab="${id}"]`);
+        if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
       }
     });
   }, { rootMargin: `-${topOffset}px 0px -50% 0px` });
