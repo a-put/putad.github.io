@@ -1172,6 +1172,14 @@ html[data-theme="dark"] .pub-modal-img-wrap {
     height: 22px;
   }
 
+  /* Education cards: prevent date/location from wrapping */
+  .edu-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 1rem;
+    flex-wrap: unset;
+  }
+
   /* Single-column layout */
   .page-layout {
     flex-direction: column;
