@@ -1083,23 +1083,39 @@ html[data-theme="dark"] .pub-modal-img-wrap {
   }
 
   header > div {
+    display: grid !important;
+    grid-template-columns: 72px 1fr;
+    gap: 0 0.875rem;
+    align-items: start;
     padding: 0 !important;
   }
 
-  header > div > .flex {
-    gap: 0.875rem !important;
-    margin-bottom: 0.5rem !important;
+  /* flatten the inner text div into the grid */
+  header > div > div {
+    display: contents;
   }
 
   #avatar {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
     width: 72px !important;
     height: 72px !important;
     border-radius: 10px !important;
   }
 
   #header-name {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
     font-size: 1.4rem !important;
     line-height: 1.3 !important;
+  }
+
+  #header-title,
+  #header-meta,
+  #header-links {
+    grid-column: 1 / -1;
   }
 
   #header-title,
