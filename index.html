@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anton Putintsev, PhD</title>
+  <!-- Anti-flash: must run before first paint -->
+  <script>
+    (function () {
+      var t = localStorage.getItem('cv-theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    }());
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ── Header ────────────────────────────────────────────── -->
+  <header class="py-10 px-6">
+    <canvas id="header-canvas" aria-hidden="true"></canvas>
+    <div style="max-width: 900px; margin: 0 auto; padding: 0 1.5rem;" class="flex items-center gap-6">
+      <img id="avatar" src="assets/avatar.jpg" alt="Profile photo" class="w-32 h-32 object-cover flex-shrink-0"
+        style="box-shadow: var(--shadow-sm); border-radius: 14px;" onerror="this.style.display='none'" />
+      <div>
+        <h1 id="header-name" class="text-3xl font-bold tracking-tight"
+          style="letter-spacing: -0.03em; color: var(--text-primary);"></h1>
+        <p id="header-title" class="mt-1 text-sm" style="color: var(--text-secondary);"></p>
+        <p id="header-meta" class="mt-0.5 text-sm" style="color: var(--text-tertiary);"></p>
+        <div id="header-links" class="flex flex-wrap gap-3 mt-3"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Body layout: sidebar + content ───────────────────── -->
+  <div class="page-layout">
+
+    <nav class="sidebar">
+      <button class="tab-btn active" data-tab="about">About</button>
+      <button class="tab-btn" data-tab="experience">Experience</button>
+      <button class="tab-btn" data-tab="publications">Publications</button>
+      <button class="tab-btn" data-tab="timeline">Timeline</button>
+      <button class="tab-btn" data-tab="skills">Skills</button>
+      <button class="tab-btn" data-tab="projects">Projects</button>
+      <button class="tab-btn" data-tab="media">Media</button>
+      <button class="tab-btn" data-tab="contact">Contact</button>
+    </nav>
+
+    <main>
+
+      <!-- About -->
+      <section id="tab-about" class="tab-section">
+        <h2 class="section-title">About</h2>
+        <div id="explainer-card"></div>
+        <p id="about-text" class="text-sm leading-relaxed" style="color: var(--text-secondary); max-width: 60ch;"></p>
+
+        <p class="subsection-label">Education</p>
+        <div id="education-list" class="flex flex-col gap-3"></div>
+
+      </section>
+
+      <!-- Experience -->
+      <section id="tab-experience" class="tab-section hidden">
+        <h2 class="section-title">Experience</h2>
+        <div id="experience-list" class="flex flex-col gap-4"></div>
+      </section>
+
+      <!-- Publications -->
+      <section id="tab-publications" class="tab-section hidden">
+        <h2 class="section-title">Publications</h2>
+        <div id="pub-profiles" class="flex flex-wrap gap-3 mb-5"></div>
+        <p class="text-xs mb-5" style="color: var(--text-tertiary);">* co-first author &nbsp;·&nbsp; <sup>†</sup>
+          corresponding author</p>
+        <div id="publications-list" class="flex flex-col gap-3"></div>
+      </section>
+
+      <!-- Skills -->
+      <section id="tab-skills" class="tab-section hidden">
+        <h2 class="section-title">Skills</h2>
+        <div id="skills-list" class="flex flex-col gap-6"></div>
+      </section>
+
+      <!-- Timeline -->
+      <section id="tab-timeline" class="tab-section hidden">
+        <h2 class="section-title">Research Timeline</h2>
+        <div id="timeline-list" class="timeline"></div>
+      </section>
+
+      <!-- Projects -->
+      <section id="tab-projects" class="tab-section hidden">
+        <h2 class="section-title">Projects</h2>
+        <div id="projects-list" class="flex flex-col gap-4"></div>
+      </section>
+
+      <!-- Media -->
+      <section id="tab-media" class="tab-section hidden">
+        <h2 class="section-title">Media</h2>
+        <div id="media-list"></div>
+      </section>
+
+      <!-- Contact -->
+      <section id="tab-contact" class="tab-section hidden">
+        <h2 class="section-title">Contact</h2>
+        <p class="text-sm mb-6" style="color: var(--text-secondary);">Drop me a message and I'll get back to you.</p>
+        <form id="contact-form" class="flex flex-col gap-4" style="max-width: 480px;">
+          <!-- Honeypot: bots fill this, humans don't -->
+          <input type="checkbox" name="botcheck" style="display:none;" tabindex="-1" autocomplete="off" />
+          <div>
+            <label class="form-label" for="f-name">Name</label>
+            <input id="f-name" name="name" type="text" required class="form-input" autocomplete="name" />
+          </div>
+          <div>
+            <label class="form-label" for="f-email">Email</label>
+            <input id="f-email" name="email" type="email" required class="form-input" autocomplete="email" />
+          </div>
+          <div>
+            <label class="form-label" for="f-message">Message</label>
+            <textarea id="f-message" name="message" rows="5" required class="form-input"
+              style="resize: vertical;"></textarea>
+          </div>
+          <div>
+            <button type="submit" class="submit-btn" id="submit-btn">Send Message</button>
+          </div>
+          <p id="form-status" class="text-sm hidden"></p>
+        </form>
+      </section>
+
+    </main>
+
+  </div><!-- /.page-layout -->
+
+  <footer class="text-center py-10" style="font-size: 0.75rem; color: var(--text-tertiary);">
+    <span id="footer-name"></span>
+  </footer>
+
+  <!-- Publication explainer modal -->
+  <div id="pub-modal" aria-modal="true" role="dialog">
+    <div id="pub-modal-card" class="pub-modal-card">
+      <div class="pub-modal-text-panel">
+        <span id="pm-journal" class="pub-modal-journal-label"></span>
+        <div id="pm-title" class="pub-modal-title"></div>
+        <p id="pm-layman" class="pub-modal-layman"></p>
+      </div>
+      <div id="pm-img-wrap" class="pub-modal-img-wrap">
+        <img id="pm-img" src="" alt="Publication illustration" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Avatar lightbox -->
+  <div id="avatar-lightbox" role="dialog" aria-modal="true" aria-label="Profile photo enlarged">
+    <img src="assets/avatar.jpg" alt="Profile photo enlarged" />
+  </div>
+
+  <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+    <span id="theme-icon">☀</span>
+  </button>
+
+  <script src="main.js?v=4"></script>
+  <script>
+    const lb = document.getElementById('avatar-lightbox');
+    document.getElementById('avatar').addEventListener('click', () => lb.classList.add('open'));
+    lb.addEventListener('click', () => lb.classList.remove('open'));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') lb.classList.remove('open'); });
+  </script>
+</body>
+
+</html>
