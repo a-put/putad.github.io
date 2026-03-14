@@ -1065,3 +1065,70 @@ html[data-theme="dark"] .pub-modal-img-wrap {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
+/* ── Mobile layout ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Single-column layout */
+  .page-layout {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 0 5rem;
+    align-items: stretch;
+  }
+
+  /* Horizontal sticky nav bar */
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 0.25rem;
+    position: sticky;
+    top: var(--header-h, 0px);
+    z-index: 90;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+  }
+
+  .sidebar::-webkit-scrollbar { display: none; }
+
+  html[data-theme="dark"] .sidebar {
+    background: rgba(28, 28, 30, 0.92);
+  }
+
+  /* Tab buttons: horizontal, compact */
+  .tab-btn {
+    width: auto;
+    flex-shrink: 0;
+    text-align: center;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  /* Show all sections */
+  .tab-section,
+  .tab-section.hidden {
+    display: block !important;
+  }
+
+  /* Section padding + scroll offset */
+  .tab-section {
+    padding: 2rem 1.5rem;
+    scroll-margin-top: calc(var(--header-h, 0px) + var(--nav-h, 0px) + 8px);
+  }
+
+  /* Divider between sections */
+  .tab-section + .tab-section {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Hide theme toggle on mobile to avoid overlap */
+  #theme-toggle {
+    bottom: 1rem;
+    right: 1rem;
+  }
+}

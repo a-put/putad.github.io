@@ -15,15 +15,72 @@ fetch('data.json')
     document.getElementById('footer-name').textContent = `© ${new Date().getFullYear()} ${data.name}`;
   });
 
-// ── Tab switching ──────────────────────────────────────────────
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-section').forEach(s => s.classList.add('hidden'));
-    btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+// ── Tab switching / mobile scroll-spy ─────────────────────────
+const mobileQuery = window.matchMedia('(max-width: 768px)');
+let scrollObserver = null;
+
+function setHeaderHeight() {
+  const h = document.querySelector('header').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+
+function setupDesktopTabs() {
+  if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+  const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'about';
+  document.querySelectorAll('.tab-section').forEach(s => {
+    s.classList.toggle('hidden', s.id !== `tab-${activeTab}`);
   });
-});
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-section').forEach(s => s.classList.add('hidden'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+    };
+  });
+}
+
+function setupMobileTabs() {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('hidden'));
+
+  const nav = document.querySelector('.sidebar');
+  document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+
+  const headerH = document.querySelector('header').offsetHeight;
+  const navH = nav.offsetHeight;
+  const topOffset = headerH + navH;
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.getElementById(`tab-${btn.dataset.tab}`)
+        .scrollIntoView({ behavior: 'smooth' });
+    };
+  });
+
+  if (scrollObserver) scrollObserver.disconnect();
+  scrollObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id.replace('tab-', '');
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.tab === id);
+        });
+      }
+    });
+  }, { rootMargin: `-${topOffset}px 0px -50% 0px` });
+
+  document.querySelectorAll('.tab-section').forEach(s => scrollObserver.observe(s));
+}
+
+function initTabs() {
+  setHeaderHeight();
+  if (mobileQuery.matches) setupMobileTabs();
+  else setupDesktopTabs();
+}
+
+mobileQuery.addEventListener('change', initTabs);
+window.addEventListener('resize', setHeaderHeight);
+initTabs();
 
 // ── Header ────────────────────────────────────────────────────
 function renderHeader(data) {
