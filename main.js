@@ -95,12 +95,12 @@ function renderHeader(data) {
 
   const linksEl = document.getElementById('header-links');
   const linkDefs = [
-    { label: 'LinkedIn', href: data.linkedin || null,                       icon: 'assets/linkedin.png' },
-    { label: 'Facebook', href: data.facebook || null,                       icon: 'assets/facebook.png' },
-    { label: 'Telegram', href: data.telegram || null,                       icon: 'assets/telegram.png' },
-    { label: 'Email',    href: data.email ? `mailto:${data.email}` : null,  icon: 'assets/mail.png'     },
+    { label: 'LinkedIn', href: data.linkedin || null,                       light: 'assets/linkedin.png',  dark: 'assets/linkedin_bw.png'  },
+    { label: 'Facebook', href: data.facebook || null,                       light: 'assets/facebook.png',  dark: 'assets/facebook_bw.png'  },
+    { label: 'Telegram', href: data.telegram || null,                       light: 'assets/telegram.png',  dark: 'assets/telegram_bw.png'  },
+    { label: 'Email',    href: data.email ? `mailto:${data.email}` : null,  light: 'assets/mail.png',      dark: 'assets/mail_bw.png'      },
   ];
-  linkDefs.forEach(({ label, href, icon }) => {
+  linkDefs.forEach(({ label, href, light, dark }) => {
     if (!href) return;
     const a = document.createElement('a');
     a.href = href;
@@ -109,11 +109,13 @@ function renderHeader(data) {
     a.title = label;
     a.setAttribute('aria-label', label);
     const img = document.createElement('img');
-    img.src = icon;
+    img.dataset.iconLight = light;
+    img.dataset.iconDark  = dark;
     img.alt = label;
     a.appendChild(img);
     linksEl.appendChild(a);
   });
+  updateSocialIcons();
 
   if (data.avatar) {
     const img = document.getElementById('avatar');
@@ -507,6 +509,14 @@ function renderMedia(data) {
   });
 }
 
+// ── Social icon theme sync ─────────────────────────────────────
+function updateSocialIcons() {
+  const isDark = document.documentElement.dataset.theme === 'dark';
+  document.querySelectorAll('#header-links img[data-icon-light]').forEach(img => {
+    img.src = isDark ? img.dataset.iconDark : img.dataset.iconLight;
+  });
+}
+
 // ── Theme (dark / light) ───────────────────────────────────────
 (function () {
   const STORAGE_KEY = 'cv-theme';
@@ -522,6 +532,7 @@ function renderMedia(data) {
       html.removeAttribute('data-theme');
       icon.textContent = '☀';
     }
+    updateSocialIcons();
   }
 
   // Sync button icon with whatever the anti-flash script already applied
