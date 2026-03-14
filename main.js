@@ -547,37 +547,33 @@ function setupContact(data) {
   const form      = document.getElementById('contact-form');
   const status    = document.getElementById('form-status');
   const submitBtn = document.getElementById('submit-btn');
-  const key       = data.contact?.web3forms_key;
+  const endpoint = data.contact?.formspree_endpoint;
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
 
-    if (!key || key === 'YOUR_ACCESS_KEY') {
-      showStatus('Form not configured — paste your Web3Forms key into data.json.', 'warn');
+    if (!endpoint || endpoint.includes('YOUR_ID_HERE')) {
+      showStatus('Form not configured — paste your Formspree endpoint into data.json.', 'warn');
       return;
     }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending…';
 
-    const fd = new FormData(form);
-    fd.append('access_key', key);
-    fd.append('subject', `CV site — message from ${fd.get('name')}`);
-    fd.append('from_name', 'Anton Putintsev CV');
-
     try {
-      const res = await fetch('https://api.web3forms.com/submit', {
+      const res = await fetch(endpoint, {
         method: 'POST',
-        body: fd,
+        headers: { 'Accept': 'application/json' },
+        body: new FormData(form),
       });
 
       const json = await res.json();
 
-      if (res.ok && json.success) {
+      if (res.ok) {
         showStatus("Message sent — I'll get back to you soon.", 'ok');
         form.reset();
       } else {
-        throw new Error(json.message || 'Unknown error');
+        throw new Error(json.error || 'Unknown error');
       }
     } catch (err) {
       showStatus(`Something went wrong. Email me directly at ${data.contact.email}.`, 'err');

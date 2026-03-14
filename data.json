@@ -435,7 +435,7 @@
     }
   ],
   "contact": {
-    "web3forms_key": "07f6158c-954d-4c2f-a553-e182cb4bd53c",
+    "formspree_endpoint": "https://formspree.io/f/meerzvbn",
     "email": "putintsev.ad@gmail.com"
   }
 }
