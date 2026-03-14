@@ -282,7 +282,7 @@
       "source": "PhysOrg",
       "date": "2025",
       "url": "https://phys.org/news/2025-04-universal-optical-logic-gate-ghz.html",
-      "image": "/assets/PRB_image_2.png",
+      "image": "assets/PRB_image_2.png",
       "description": "Using a pump-pump optical configuration, researchers establish the intrinsic repetition rate limit of consecutive polariton condensates in an organic microcavity at room temperature. Residual polariton population from the first pulse seeds stimulated relaxation for the second, setting a lower bound on temporal separation for independent logic state operation. This behavior is governed by momentum-dependent bimolecular quenching between propagating polaritons and localized Frenkel excitons — a k-linear nonradiative loss channel captured by a Lindblad-based microscopic model — yielding an operational bandwidth of ~240 GHz, with cavity optimization simulations suggesting extension toward 0.5 THz."
     },
     {
@@ -290,7 +290,7 @@
       "source": "AZO Optics",
       "date": "2024",
       "url": "https://www.azooptics.com/News.aspx?newsID=28879",
-      "image": "/assets/NatCom2.png",
+      "image": "assets/NatCom2.png",
       "description": "A research team from Skoltech and Bergische Universität Wuppertal in Germany, have created a universal NOR logical element (from NOT — a negation operator and OR — a disjunction operator). It is based on polariton condensates, operates at room temperature, has multiple inputs, can work hundreds of times faster than electronic analogues, and is also completely optical — that is, it works without electric current. Importantly, such logic elements can be reproduced and connected on a circuit, that is, cascaded. The research results are presented in the Nature Communications journal."
     },
     {
@@ -298,7 +298,7 @@
       "source": "Skoletch",
       "date": "2023",
       "url": "https://www.skoltech.ru/en/news/future-high-speed-unconventional-computing-nears-scientists-manipulate-quantum-fluids-light",
-      "image": "/assets/bw_image_2.png",
+      "image": "assets/bw_image_2.png",
       "description": "With this development, scientists now have the power to design all-optical polariton logic devices that harness the benefits of ultrafast microcavity refractive index modulation as another independent, real-time tuning parameter. It also enables the integration of such weakly coupled absorbers in microcavities of a lateral design that have been recently proposed to bring polariton platforms into the plane of a photonic chip circuitry domain."
     },
     {
