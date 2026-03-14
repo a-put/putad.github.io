@@ -561,20 +561,14 @@ function setupContact(data) {
     submitBtn.textContent = 'Sending…';
 
     const fd = new FormData(form);
+    fd.append('access_key', key);
+    fd.append('subject', `CV site — message from ${fd.get('name')}`);
+    fd.append('from_name', 'Anton Putintsev CV');
 
     try {
       const res = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          access_key: key,
-          name:       fd.get('name'),
-          email:      fd.get('email'),
-          message:    fd.get('message'),
-          subject:    `CV site — message from ${fd.get('name')}`,
-          from_name:  'Anton Putintsev CV',
-          botcheck:   fd.get('botcheck'),
-        }),
+        body: fd,
       });
 
       const json = await res.json();
