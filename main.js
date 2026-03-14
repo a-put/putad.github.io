@@ -570,8 +570,10 @@ function setupContact(data) {
       const json = await res.json();
 
       if (res.ok) {
-        showStatus("Message sent — I'll get back to you soon.", 'ok');
-        form.reset();
+        form.style.display = 'none';
+        const success = document.getElementById('form-success');
+        success.style.display = 'flex';
+        success.classList.remove('hidden');
       } else {
         throw new Error(json.error || 'Unknown error');
       }
