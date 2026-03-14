@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sips:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:wiley.altmetric.com)",
+      "mcp__playwright__browser_evaluate"
+    ]
+  }
+}
