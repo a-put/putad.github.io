@@ -1083,8 +1083,12 @@ html[data-theme="dark"] .pub-modal-img-wrap {
   }
 
   header > div {
-    gap: 0.875rem !important;
     padding: 0 !important;
+  }
+
+  header > div > .flex {
+    gap: 0.875rem !important;
+    margin-bottom: 0.5rem !important;
   }
 
   #avatar {
