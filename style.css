@@ -886,6 +886,35 @@ html[data-theme="dark"] .pub-modal-img-wrap {
 
 /* ── Publication explain button ──────────────────────────── */
 
+/* ── Publication modal close button (mobile) ─────────────── */
+#pub-modal-close {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1100;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  align-items: center;
+  justify-content: center;
+}
+
+#pub-modal.open #pub-modal-close {
+  display: flex;
+}
+
+@media (min-width: 769px) {
+  #pub-modal-close { display: none !important; }
+}
+
 /* ── Publication explainer modal ─────────────────────────── */
 #pub-modal {
   position: fixed;

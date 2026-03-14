@@ -273,6 +273,7 @@ function openPubModal(pub) {
   const card  = document.getElementById('pub-modal-card');
   modal.addEventListener('click', () => modal.classList.remove('open'));
   card.addEventListener('click', e => e.stopPropagation());
+  document.getElementById('pub-modal-close').addEventListener('click', () => modal.classList.remove('open'));
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') modal.classList.remove('open');
   });
