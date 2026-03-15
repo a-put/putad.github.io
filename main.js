@@ -9,7 +9,6 @@ fetch('data.json')
     renderPublications(data);
     renderTimeline(data);
     renderSkills(data);
-    renderProjects(data);
     renderMedia(data);
     setupContact(data);
     document.getElementById('footer-name').textContent = `© ${new Date().getFullYear()} ${data.name}`;
