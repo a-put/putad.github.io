@@ -709,8 +709,13 @@ function initHeaderParticles(data) {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = header.offsetWidth * dpr;
-      canvas.height = header.offsetHeight * dpr;
+      const newW = header.offsetWidth * dpr;
+      const newH = header.offsetHeight * dpr;
+      // Skip if dimensions unchanged — prevents mobile address-bar resize from
+      // resetting dot positions on every scroll
+      if (newW === canvas.width && newH === canvas.height) return;
+      canvas.width = newW;
+      canvas.height = newH;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       buildDots();
     }, 100);
@@ -898,7 +903,8 @@ function initHeaderParticles(data) {
     mouse.x = t0.clientX - r.left;
     mouse.y = t0.clientY - r.top;
   }, { passive: true });
-  header.addEventListener('touchend', () => { mouse.x = mouse.y = -9999; }, { passive: true });
+  document.addEventListener('touchend',    () => { mouse.x = mouse.y = -9999; }, { passive: true });
+  document.addEventListener('touchcancel', () => { mouse.x = mouse.y = -9999; }, { passive: true });
 
   // Mouse click (desktop only — skip if touch already handled it)
   header.addEventListener('click', e => {
