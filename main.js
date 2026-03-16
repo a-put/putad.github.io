@@ -609,24 +609,38 @@ function initHeaderParticles(data) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   const canvas = document.getElementById('header-canvas');
-  const ctx = canvas.getContext('2d');
+  const ctx    = canvas.getContext('2d');
   const header = canvas.closest('header');
 
-  const COUNT        = data.particles?.count         ?? 220;
-  const REPEL_RADIUS = data.particles?.repelRadius   ?? 90;
-  const REPEL_STR    = data.particles?.repelStrength ?? 4;
-  const SPRING       = data.particles?.spring        ?? 0.06;
-  const DAMPING      = data.particles?.damping       ?? 0.82;
-  const DOT_R        = data.particles?.dotRadius     ?? 1.5;
+  const COUNT          = data.particles?.count          ?? 220;
+  const REPEL_RADIUS   = data.particles?.repelRadius    ?? 90;
+  const REPEL_STR      = data.particles?.repelStrength  ?? 4;
+  const SPRING         = data.particles?.spring         ?? 0.06;
+  const DAMPING        = data.particles?.damping        ?? 0.82;
+  const DOT_R          = data.particles?.dotRadius      ?? 1.5;
+  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 80;
+  const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
+  const DRIFT_STR      = data.particles?.driftStrength  ?? 0.05;
+  const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.00025;
+  const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
+  const RIPPLE_STR     = data.particles?.rippleStrength ?? 7;
+  const CR2            = CONNECT_RADIUS * CONNECT_RADIUS;
 
-  let dots = [], mouse = { x: -9999, y: -9999 };
+  let dots = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
 
-  function dotColor() {
+  // Pseudo-noise from superimposed sines — no library needed
+  function noise(x, y) {
+    return (Math.sin(x * 1.4 + y * 0.8) +
+            Math.sin(x * 0.6 - y * 1.3) +
+            Math.sin((x - y) * 1.1)) / 3;
+  }
+
+  function getColor() {
     const hasBg  = header.classList.contains('has-bg-image');
     const isDark = document.documentElement.dataset.theme === 'dark';
-    if (hasBg)  return 'rgba(255, 255, 255, 0.40)';
-    if (isDark) return 'rgba(174, 174, 178, 0.28)';
-    return              'rgba(110, 110, 115, 0.22)';
+    if (hasBg)  return [255, 255, 255];
+    if (isDark) return [174, 174, 178];
+    return              [110, 110, 115];
   }
 
   function buildDots() {
@@ -653,29 +667,98 @@ function initHeaderParticles(data) {
     buildDots();
   }
 
+  function spawnRipple(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    ripples.push({ x: clientX - rect.left, y: clientY - rect.top, r: 0 });
+  }
+
   function tick() {
+    t += DRIFT_SPEED;
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr, H = canvas.height / dpr;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = dotColor();
+
+    const [cr, cg, cb] = getColor();
+
+    // ── Physics ──────────────────────────────────────────────
     for (const d of dots) {
-      const dx = d.x - mouse.x, dy = d.y - mouse.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < REPEL_RADIUS && dist > 0) {
-        const force = (1 - dist / REPEL_RADIUS);
-        d.vx += (dx / dist) * force * REPEL_STR;
-        d.vy += (dy / dist) * force * REPEL_STR;
+      // Cursor repulsion
+      const mx = d.x - mouse.x, my = d.y - mouse.y;
+      const mdist = Math.hypot(mx, my);
+      if (mdist < REPEL_RADIUS && mdist > 0) {
+        const f = (1 - mdist / REPEL_RADIUS);
+        d.vx += (mx / mdist) * f * REPEL_STR;
+        d.vy += (my / mdist) * f * REPEL_STR;
       }
+
+      // Ripple ring forces
+      for (const rip of ripples) {
+        const rx = d.x - rip.x, ry = d.y - rip.y;
+        const rdist = Math.hypot(rx, ry);
+        const ring  = Math.abs(rdist - rip.r);
+        if (ring < 25 && rdist > 0) {
+          const f = (1 - ring / 25) * RIPPLE_STR * (1 - rip.r / RIPPLE_MAX_R);
+          d.vx += (rx / rdist) * f;
+          d.vy += (ry / rdist) * f;
+        }
+      }
+
+      // Noise drift
+      const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
+      d.vx += Math.cos(angle) * DRIFT_STR;
+      d.vy += Math.sin(angle) * DRIFT_STR;
+
+      // Spring to home + damping
       d.vx += (d.hx - d.x) * SPRING;
       d.vy += (d.hy - d.y) * SPRING;
       d.vx *= DAMPING;
       d.vy *= DAMPING;
       d.x  += d.vx;
       d.y  += d.vy;
+    }
+
+    // Advance and cull ripples
+    for (const rip of ripples) rip.r += 4;
+    ripples = ripples.filter(rip => rip.r < RIPPLE_MAX_R);
+
+    // ── Draw connections (batched into alpha buckets) ─────────
+    const BUCKETS  = 5;
+    const buckets  = Array.from({ length: BUCKETS }, () => []);
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = dots[i].x - dots[j].x;
+        const dy = dots[i].y - dots[j].y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < CR2) {
+          const bi = Math.min(BUCKETS - 1,
+            Math.floor((1 - Math.sqrt(d2) / CONNECT_RADIUS) * BUCKETS));
+          buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
+        }
+      }
+    }
+    ctx.lineWidth    = 1;
+    ctx.strokeStyle  = `rgb(${cr},${cg},${cb})`;
+    for (let bi = 0; bi < BUCKETS; bi++) {
+      const lines = buckets[bi];
+      if (!lines.length) continue;
+      ctx.globalAlpha = ((bi + 0.5) / BUCKETS) * CONNECT_ALPHA;
+      ctx.beginPath();
+      for (let k = 0; k < lines.length; k += 4) {
+        ctx.moveTo(lines[k], lines[k + 1]);
+        ctx.lineTo(lines[k + 2], lines[k + 3]);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Draw dots ─────────────────────────────────────────────
+    ctx.fillStyle = `rgba(${cr},${cg},${cb},0.65)`;
+    for (const d of dots) {
       ctx.beginPath();
       ctx.arc(d.x, d.y, DOT_R, 0, Math.PI * 2);
       ctx.fill();
     }
+
     requestAnimationFrame(tick);
   }
 
@@ -685,6 +768,10 @@ function initHeaderParticles(data) {
     mouse.y = e.clientY - r.top;
   });
   header.addEventListener('mouseleave', () => { mouse.x = mouse.y = -9999; });
+  header.addEventListener('click', e => spawnRipple(e.clientX, e.clientY));
+  header.addEventListener('touchstart', e => {
+    Array.from(e.touches).forEach(touch => spawnRipple(touch.clientX, touch.clientY));
+  }, { passive: true });
   window.addEventListener('resize', resize);
 
   resize();
