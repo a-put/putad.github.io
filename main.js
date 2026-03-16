@@ -739,7 +739,7 @@ function initHeaderParticles(data) {
     }
 
     // Advance and cull ripples
-    for (const rip of ripples) rip.r += 2.5;
+    for (const rip of ripples) rip.r += 3.5;
     ripples = ripples.filter(rip => rip.r < RIPPLE_MAX_R);
 
     // ── Draw connections (batched into alpha buckets) ─────────
