@@ -618,13 +618,16 @@ function initHeaderParticles(data) {
   const SPRING         = data.particles?.spring         ?? 0.06;
   const DAMPING        = data.particles?.damping        ?? 0.82;
   const DOT_R          = data.particles?.dotRadius      ?? 1.5;
-  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 80;
+  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 55;
   const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
+  const EDGE_ZONE      = data.particles?.edgeZone       ?? 55;
+  const EDGE_LEN       = data.particles?.edgeLineLen    ?? 28;
+  const EDGE_ALPHA     = data.particles?.edgeAlpha      ?? 0.13;
   const DRIFT_AMP      = data.particles?.driftAmplitude ?? 12;
   const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.0004;
   const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
   const RIPPLE_STR     = data.particles?.rippleStrength ?? 7;
-  const CR2            = CONNECT_RADIUS * CONNECT_RADIUS;
+  let CR2              = CONNECT_RADIUS * CONNECT_RADIUS;
 
   let dots = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
 
@@ -745,6 +748,29 @@ function initHeaderParticles(data) {
         ctx.moveTo(lines[k], lines[k + 1]);
         ctx.lineTo(lines[k + 2], lines[k + 3]);
       }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Edge tendrils ─────────────────────────────────────────
+    ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
+    ctx.lineWidth   = 1;
+    for (const d of dots) {
+      const dLeft  = d.x,     dRight = W - d.x;
+      const dTop   = d.y,     dBot   = H - d.y;
+      const dEdge  = Math.min(dLeft, dRight, dTop, dBot);
+      if (dEdge >= EDGE_ZONE) continue;
+      const factor = 1 - dEdge / EDGE_ZONE;
+      // Direction toward nearest edge
+      let ex = 0, ey = 0;
+      if (dEdge === dLeft)  ex = -1;
+      else if (dEdge === dRight) ex =  1;
+      else if (dEdge === dTop)   ey = -1;
+      else                       ey =  1;
+      ctx.globalAlpha = factor * EDGE_ALPHA;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x + ex * EDGE_LEN * factor, d.y + ey * EDGE_LEN * factor);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
