@@ -626,7 +626,7 @@ function initHeaderParticles(data) {
   const SPRING = data.particles?.spring ?? 0.06;
   const DAMPING = data.particles?.damping ?? 0.82;
   const DOT_R = data.particles?.dotRadius ?? 1.5;
-  const CONNECT_RADIUS = data.particles?.connectRadius ?? 60;
+  const CONNECT_RADIUS = data.particles?.connectRadius ?? 70;
   const CONNECT_ALPHA = data.particles?.connectAlpha ?? 0.18;
   const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP = data.particles?.driftAmplitude ?? 20;
@@ -784,12 +784,22 @@ function initHeaderParticles(data) {
         const dispFactor = Math.min(1, disp / 25);
         // Slow per-dot hue cycle (deep blue → cool white)
         const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.4;
-        const blend = Math.max(cycleFactor, dispFactor);
+        // Ripple ring proximity → direct colour flash
+        let rippleFactor = 0;
+        for (const rip of ripples) {
+          const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
+          const ring = Math.abs(rdist - rip.r);
+          if (ring < 35) {
+            const rf = (1 - ring / 35) * (1 - rip.r / RIPPLE_MAX_R);
+            if (rf > rippleFactor) rippleFactor = rf;
+          }
+        }
+        const blend = Math.max(cycleFactor, dispFactor, rippleFactor);
         // deep blue [90,110,210] → cool white [210,220,255]
         dr = Math.round(90 + 120 * blend);
         dg = Math.round(110 + 110 * blend);
         db = Math.round(210 + 45 * blend);
-        baseAlpha = Math.min(1, baseAlpha + dispFactor * 0.35);
+        baseAlpha = Math.min(1, baseAlpha + Math.max(dispFactor, rippleFactor) * 0.35);
       }
 
       ctx.fillStyle = `rgba(${dr},${dg},${db},${baseAlpha.toFixed(2)})`;
