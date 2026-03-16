@@ -1079,38 +1079,74 @@ html[data-theme="dark"] .pub-modal-img-wrap {
 }
 
 /* ── Dark mode toggle button ─────────────────────────────── */
+/* ── Theme toggle — pill switch ──────────────────────────── */
 #theme-toggle {
   position: fixed;
   top: 1rem;
   right: 1rem;
   z-index: 2000;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  width: 60px;
+  height: 32px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(0, 0, 0, 0.13);
+  background: #d8d8dc;
   cursor: pointer;
-  font-size: 1.1rem;
-  font-family: inherit;
-  line-height: 1;
+  padding: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background 0.2s ease, box-shadow 0.2s ease,
-              border-color 0.2s ease, transform 0.15s ease;
+  transition: background 0.35s ease, border-color 0.35s ease;
+  box-shadow: none;
 }
 
-#theme-toggle:hover {
-  box-shadow: var(--shadow-md);
-  transform: scale(1.08);
-}
+#theme-toggle:hover { opacity: 0.85; }
 
 #theme-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
+html[data-theme="dark"] #theme-toggle {
+  background: #3a3a3c;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Knob */
+#theme-knob {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f0f0f3;
+  margin-left: 3px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transform: translateX(0);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.35s ease;
+}
+
+html[data-theme="dark"] #theme-knob {
+  transform: translateX(28px);
+  background: #48484a;
+}
+
+/* Icons inside knob */
+#icon-sun,
+#icon-moon {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transition: opacity 0.25s ease, transform 0.35s ease;
+}
+
+#icon-sun  { color: #3a3a3c; opacity: 1; transform: scale(1) rotate(0deg); }
+#icon-moon { color: #e5e5ea; opacity: 0; transform: scale(0.7) rotate(-30deg); }
+
+html[data-theme="dark"] #icon-sun  { opacity: 0; transform: scale(0.7) rotate(30deg); }
+html[data-theme="dark"] #icon-moon { opacity: 1; transform: scale(1) rotate(0deg); }
 
 /* ── Mobile layout ───────────────────────────────────────────── */
 @media (max-width: 768px) {

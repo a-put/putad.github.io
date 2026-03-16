@@ -540,15 +540,12 @@ function updateSocialIcons() {
   const STORAGE_KEY = 'cv-theme';
   const html = document.documentElement;
   const btn = document.getElementById('theme-toggle');
-  const icon = document.getElementById('theme-icon');
 
   function applyTheme(theme) {
     if (theme === 'dark') {
       html.setAttribute('data-theme', 'dark');
-      icon.textContent = '☾';
     } else {
       html.removeAttribute('data-theme');
-      icon.textContent = '☀';
     }
     updateSocialIcons();
   }

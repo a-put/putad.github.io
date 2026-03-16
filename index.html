@@ -159,7 +159,24 @@
   </div>
 
   <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
-    <span id="theme-icon">☀</span>
+    <span id="theme-knob">
+      <!-- Sun icon -->
+      <svg id="icon-sun" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <circle cx="10" cy="10" r="3.5"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(0   10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(45  10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(90  10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(135 10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(180 10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(225 10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(270 10 10)"/>
+        <rect x="9" y="1"   width="2" height="3" rx="1" transform="rotate(315 10 10)"/>
+      </svg>
+      <!-- Moon icon -->
+      <svg id="icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </span>
   </button>
 
   <script src="main.js?v=5"></script>
