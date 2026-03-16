@@ -625,9 +625,11 @@ function initHeaderParticles(data) {
   const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.0004;
   const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
   const RIPPLE_STR     = data.particles?.rippleStrength ?? 7;
-  let CR2              = CONNECT_RADIUS * CONNECT_RADIUS;
+  const CR2            = CONNECT_RADIUS * CONNECT_RADIUS;
 
-  let dots = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
+  const BUCKETS  = 5;
+  const buckets  = Array.from({ length: BUCKETS }, () => []);
+  let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
 
   // Pseudo-noise from superimposed sines — no library needed
   function noise(x, y) {
@@ -658,17 +660,23 @@ function initHeaderParticles(data) {
       for (let c = 0; c < cols && dots.length < total; c++) {
         const hx = -mx + (c + 0.2 + Math.random() * 0.6) * cw;
         const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
-        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0 });
+        const depth = Math.random(); // 0 = deep/far, 1 = shallow/near
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth });
       }
     }
+    dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
   }
 
+  let resizeTimer;
   function resize() {
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width  = header.offsetWidth  * dpr;
-    canvas.height = header.offsetHeight * dpr;
-    ctx.scale(dpr, dpr);
-    buildDots();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width  = header.offsetWidth  * dpr;
+      canvas.height = header.offsetHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildDots();
+    }, 100);
   }
 
   function spawnRipple(clientX, clientY) {
@@ -686,11 +694,11 @@ function initHeaderParticles(data) {
 
     // ── Physics ──────────────────────────────────────────────
     for (const d of dots) {
-      // Cursor repulsion
+      // Cursor repulsion — shallow dots flee faster
       const mx = d.x - mouse.x, my = d.y - mouse.y;
       const mdist = Math.hypot(mx, my);
       if (mdist < REPEL_RADIUS && mdist > 0) {
-        const f = (1 - mdist / REPEL_RADIUS);
+        const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth);
         d.vx += (mx / mdist) * f * REPEL_STR;
         d.vy += (my / mdist) * f * REPEL_STR;
       }
@@ -713,8 +721,10 @@ function initHeaderParticles(data) {
       const ty = d.hy + Math.sin(angle) * DRIFT_AMP;
       d.vx += (tx - d.x) * SPRING;
       d.vy += (ty - d.y) * SPRING;
-      d.vx *= DAMPING;
-      d.vy *= DAMPING;
+      // Deeper dots are more sluggish
+      const damp = DAMPING + 0.12 * (1 - d.depth);
+      d.vx *= damp;
+      d.vy *= damp;
       d.x  += d.vx;
       d.y  += d.vy;
     }
@@ -724,8 +734,7 @@ function initHeaderParticles(data) {
     ripples = ripples.filter(rip => rip.r < RIPPLE_MAX_R);
 
     // ── Draw connections (batched into alpha buckets) ─────────
-    const BUCKETS  = 5;
-    const buckets  = Array.from({ length: BUCKETS }, () => []);
+    for (let i = 0; i < BUCKETS; i++) buckets[i].length = 0;
     for (let i = 0; i < dots.length; i++) {
       for (let j = i + 1; j < dots.length; j++) {
         const dx = dots[i].x - dots[j].x;
@@ -753,11 +762,13 @@ function initHeaderParticles(data) {
     }
     ctx.globalAlpha = 1;
 
-    // ── Draw dots ─────────────────────────────────────────────
-    ctx.fillStyle = `rgba(${cr},${cg},${cb},0.65)`;
-    for (const d of dots) {
+    // ── Draw dots (back-to-front, depth-scaled size + opacity) ──
+    for (const d of dotsByDepth) {
+      const r     = DOT_R * (0.4 + 0.9 * d.depth);
+      const alpha = 0.2  + 0.6  * d.depth;
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, DOT_R, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -776,6 +787,11 @@ function initHeaderParticles(data) {
   }, { passive: true });
   window.addEventListener('resize', resize);
 
-  resize();
+  // Initial setup — run immediately, not debounced
+  const dpr0 = window.devicePixelRatio || 1;
+  canvas.width  = header.offsetWidth  * dpr0;
+  canvas.height = header.offsetHeight * dpr0;
+  ctx.setTransform(dpr0, 0, 0, dpr0, 0, 0);
+  buildDots();
   tick();
 }
