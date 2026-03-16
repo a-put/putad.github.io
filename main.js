@@ -618,7 +618,7 @@ function initHeaderParticles(data) {
   const SPRING         = data.particles?.spring         ?? 0.06;
   const DAMPING        = data.particles?.damping        ?? 0.82;
   const DOT_R          = data.particles?.dotRadius      ?? 1.5;
-  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 55;
+  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 65;
   const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
   const MARGIN         = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP      = data.particles?.driftAmplitude ?? 12;
