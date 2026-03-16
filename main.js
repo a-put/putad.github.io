@@ -620,8 +620,8 @@ function initHeaderParticles(data) {
   const DOT_R          = data.particles?.dotRadius      ?? 1.5;
   const CONNECT_RADIUS = data.particles?.connectRadius  ?? 80;
   const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
-  const DRIFT_STR      = data.particles?.driftStrength  ?? 0.05;
-  const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.00025;
+  const DRIFT_AMP      = data.particles?.driftAmplitude ?? 12;
+  const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.0004;
   const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
   const RIPPLE_STR     = data.particles?.rippleStrength ?? 7;
   const CR2            = CONNECT_RADIUS * CONNECT_RADIUS;
@@ -703,14 +703,12 @@ function initHeaderParticles(data) {
         }
       }
 
-      // Noise drift
+      // Spring toward noise-drifted home target
       const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
-      d.vx += Math.cos(angle) * DRIFT_STR;
-      d.vy += Math.sin(angle) * DRIFT_STR;
-
-      // Spring to home + damping
-      d.vx += (d.hx - d.x) * SPRING;
-      d.vy += (d.hy - d.y) * SPRING;
+      const tx = d.hx + Math.cos(angle) * DRIFT_AMP;
+      const ty = d.hy + Math.sin(angle) * DRIFT_AMP;
+      d.vx += (tx - d.x) * SPRING;
+      d.vy += (ty - d.y) * SPRING;
       d.vx *= DAMPING;
       d.vy *= DAMPING;
       d.x  += d.vx;
