@@ -126,7 +126,8 @@ header.has-bg-image #header-meta {
   flex-direction: column;
   gap: 0.15rem;
   position: sticky;
-  top: 2.5rem;
+  top: calc(var(--header-h, 0px) + 1.5rem);
+  align-self: flex-start;
 }
 
 /* ── Tab buttons (vertical) ──────────────────────────────── */
@@ -194,6 +195,17 @@ html[data-theme="dark"] .tab-btn.active {
     white-space: nowrap;
     width: auto;
   }
+}
+
+/* ── Tab sections (desktop scroll layout) ───────────────── */
+.tab-section {
+  scroll-margin-top: calc(var(--header-h, 0px) + 16px);
+  padding-bottom: 4rem;
+}
+
+.tab-section + .tab-section {
+  padding-top: 4rem;
+  border-top: 1px solid var(--border);
 }
 
 /* ── Typography ──────────────────────────────────────────── */

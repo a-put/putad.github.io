@@ -653,7 +653,7 @@ function initHeaderParticles(data) {
   const TURB_DECAY   = 0.93;
   const TURB_SCALE   = 0.04;
   const TURB_MAX     = 3.0;
-  const GRAVITY_STR  = 0.06; // peak downward force at full scroll
+  const GRAVITY_STR  = 20;   // max vertical home-offset (px) at full scroll
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
       prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
       scrollProgress = 0;
@@ -739,8 +739,8 @@ function initHeaderParticles(data) {
     prevMouse.x = mouse.x;
     prevMouse.y = mouse.y;
 
-    // ── Scroll gravity ───────────────────────────────────────
-    const gravityY = (scrollProgress - 0.5) * GRAVITY_STR;
+    // ── Scroll gravity offset ────────────────────────────────
+    const gravityOffset = (scrollProgress - 0.5) * GRAVITY_STR;
 
     // ── Physics ──────────────────────────────────────────────
     for (const d of dots) {
@@ -765,13 +765,10 @@ function initHeaderParticles(data) {
         }
       }
 
-      // Scroll gravity tilt
-      d.vy += gravityY;
-
-      // Spring toward noise-drifted home target
+      // Spring toward noise-drifted home target, shifted by scroll gravity
       const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
       const tx = d.hx + Math.cos(angle) * DRIFT_AMP;
-      const ty = d.hy + Math.sin(angle) * DRIFT_AMP;
+      const ty = d.hy + Math.sin(angle) * DRIFT_AMP + gravityOffset;
       d.vx += (tx - d.x) * SPRING;
       d.vy += (ty - d.y) * SPRING;
       // Deeper dots are more sluggish
