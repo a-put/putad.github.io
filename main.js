@@ -629,8 +629,8 @@ function initHeaderParticles(data) {
   const CONNECT_RADIUS = data.particles?.connectRadius ?? 60;
   const CONNECT_ALPHA = data.particles?.connectAlpha ?? 0.18;
   const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
-  const DRIFT_AMP = data.particles?.driftAmplitude ?? 12;
-  const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0004;
+  const DRIFT_AMP = data.particles?.driftAmplitude ?? 20;
+  const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0006;
   const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
   const CR2 = CONNECT_RADIUS * CONNECT_RADIUS;
