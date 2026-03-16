@@ -89,8 +89,11 @@ function initTabs() {
   else setupDesktopTabs();
 }
 
+let initTabsTimer;
+function initTabsDebounced() { clearTimeout(initTabsTimer); initTabsTimer = setTimeout(initTabs, 120); }
+
 mobileQuery.addEventListener('change', initTabs);
-window.addEventListener('resize', initTabs);
+window.addEventListener('resize', initTabsDebounced);
 initTabs();
 
 // ── Header ────────────────────────────────────────────────────
@@ -651,14 +654,16 @@ function initHeaderParticles(data) {
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
   const GRAVITY_STR = 10;   // max vertical home-offset (px) at full scroll
+  const TILT_AMP    = 30;   // max px offset for near dots (depth=1) at full tilt
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
-    scrollProgress = 0;
+    scrollProgress = 0, tiltX = 0, tiltY = 0;
 
-  // Cache scroll progress — avoid reflow inside rAF
+  // Cache scroll progress and canvas rect — avoid reflow inside rAF
   function updateScroll() {
     const scrollMax = document.body.scrollHeight - window.innerHeight;
     scrollProgress = scrollMax > 0 ? window.scrollY / scrollMax : 0;
+    updateRect();
   }
   window.addEventListener('scroll', updateScroll, { passive: true });
   window.addEventListener('resize', updateScroll, { passive: true });
@@ -701,6 +706,9 @@ function initHeaderParticles(data) {
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
   }
 
+  let canvasRect = { left: 0, top: 0 };
+  function updateRect() { canvasRect = canvas.getBoundingClientRect(); }
+
   let resizeTimer;
   function resize() {
     clearTimeout(resizeTimer);
@@ -715,12 +723,12 @@ function initHeaderParticles(data) {
       canvas.height = newH;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       buildDots();
+      updateRect();
     }, 100);
   }
 
   function spawnRipple(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect();
-    ripples.push({ x: clientX - rect.left, y: clientY - rect.top, r: 0 });
+    ripples.push({ x: clientX - canvasRect.left, y: clientY - canvasRect.top, r: 0 });
   }
 
   function tick() {
@@ -767,10 +775,12 @@ function initHeaderParticles(data) {
         }
       }
 
-      // Spring toward noise-drifted home target, shifted by scroll gravity
+      // Spring toward noise-drifted home target, shifted by gravity + tilt parallax
       const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
-      const tx = d.hx + Math.cos(angle) * DRIFT_AMP;
-      const ty = d.hy + Math.sin(angle) * DRIFT_AMP + gravityOffset;
+      const tiltScale = Math.max(-1, Math.min(1, tiltX / 25)) * TILT_AMP * d.depth;
+      const tiltScaleY = Math.max(-1, Math.min(1, tiltY / 25)) * TILT_AMP * d.depth;
+      const tx = d.hx + Math.cos(angle) * DRIFT_AMP + tiltScale;
+      const ty = d.hy + Math.sin(angle) * DRIFT_AMP + gravityOffset + tiltScaleY;
       d.vx += (tx - d.x) * SPRING;
       d.vy += (ty - d.y) * SPRING;
       // Deeper dots are more sluggish
@@ -839,18 +849,13 @@ function initHeaderParticles(data) {
 
     // ── Draw dots (back-to-front, depth-scaled size + opacity) ──
     const isDark = document.documentElement.dataset.theme === 'dark';
-    for (const d of dotsByDepth) {
-      const radius = DOT_R * (0.4 + 0.9 * d.depth);
-      let baseAlpha = 0.2 + 0.6 * d.depth;
-      let dr = cr, dg = cg, db = cb;
-
-      if (isDark) {
-        // Displacement from home → glow intensity
+    if (isDark) {
+      // Dark mode: bioluminescence — each dot has individual colour, draw one by one
+      for (const d of dotsByDepth) {
+        const radius = DOT_R * (0.4 + 0.9 * d.depth);
         const disp = Math.hypot(d.x - d.hx, d.y - d.hy);
         const dispFactor = Math.min(1, disp / 25);
-        // Slow per-dot hue cycle (deep blue → cool white)
         const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.4;
-        // Ripple ring proximity → direct colour flash
         let rippleFactor = 0;
         for (const rip of ripples) {
           const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
@@ -861,26 +866,42 @@ function initHeaderParticles(data) {
           }
         }
         const blend = Math.max(cycleFactor, dispFactor, rippleFactor);
-        // deep blue [90,110,210] → cool white [210,220,255]
-        dr = Math.round(90 + 120 * blend);
-        dg = Math.round(110 + 110 * blend);
-        db = Math.round(210 + 45 * blend);
-        baseAlpha = Math.min(1, baseAlpha + dispFactor * 0.35 + rippleFactor * 0.7);
+        const dr = Math.round(90  + 120 * blend);
+        const dg = Math.round(110 + 110 * blend);
+        const db = Math.round(210 +  45 * blend);
+        const alpha = Math.min(1, (0.2 + 0.6 * d.depth) + dispFactor * 0.35 + rippleFactor * 0.7);
+        ctx.fillStyle = `rgba(${dr},${dg},${db},${alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
-
-      ctx.fillStyle = `rgba(${dr},${dg},${db},${baseAlpha.toFixed(2)})`;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
-      ctx.fill();
+    } else {
+      // Light mode: all dots same colour — batch by alpha bucket to minimise fillStyle changes
+      const DBUCKETS = 8;
+      for (let bi = 0; bi < DBUCKETS; bi++) {
+        const alphaMin = bi / DBUCKETS;
+        const alphaMax = (bi + 1) / DBUCKETS;
+        const alphaMid = (alphaMin + alphaMax) / 2;
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${alphaMid.toFixed(2)})`;
+        ctx.beginPath();
+        for (const d of dotsByDepth) {
+          const alpha = 0.2 + 0.6 * d.depth;
+          if (alpha >= alphaMin && alpha < alphaMax) {
+            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            ctx.moveTo(d.x + radius, d.y);
+            ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+          }
+        }
+        ctx.fill();
+      }
     }
 
     requestAnimationFrame(tick);
   }
 
   header.addEventListener('mousemove', e => {
-    const r = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - r.left;
-    mouse.y = e.clientY - r.top;
+    mouse.x = e.clientX - canvasRect.left;
+    mouse.y = e.clientY - canvasRect.top;
   });
   header.addEventListener('mouseleave', () => { mouse.x = mouse.y = -9999; });
 
@@ -888,20 +909,48 @@ function initHeaderParticles(data) {
   let touchFired = false;
   header.addEventListener('touchstart', e => {
     touchFired = true;
-    const r = canvas.getBoundingClientRect();
+    updateRect();
     const t0 = e.touches[0];
-    mouse.x = t0.clientX - r.left;
-    mouse.y = t0.clientY - r.top;
+    mouse.x = t0.clientX - canvasRect.left;
+    mouse.y = t0.clientY - canvasRect.top;
     Array.from(e.touches).forEach(touch => spawnRipple(touch.clientX, touch.clientY));
   }, { passive: true });
   header.addEventListener('touchmove', e => {
-    const r = canvas.getBoundingClientRect();
     const t0 = e.touches[0];
-    mouse.x = t0.clientX - r.left;
-    mouse.y = t0.clientY - r.top;
+    mouse.x = t0.clientX - canvasRect.left;
+    mouse.y = t0.clientY - canvasRect.top;
   }, { passive: true });
   document.addEventListener('touchend',    () => { mouse.x = mouse.y = -9999; }, { passive: true });
   document.addEventListener('touchcancel', () => { mouse.x = mouse.y = -9999; }, { passive: true });
+
+  // ── Device tilt parallax (mobile) ────────────────────────
+  function setupTilt() {
+    if (typeof DeviceOrientationEvent === 'undefined') return;
+    let calibX = null, calibY = null;
+
+    function onOrientation(e) {
+      if (e.gamma === null) return;
+      if (calibX === null) { calibX = e.gamma; calibY = e.beta; }
+      const dx = e.gamma - calibX;
+      const dy = e.beta  - calibY;
+      // Low-pass filter to smooth sensor jitter
+      tiltX += (dx - tiltX) * 0.08;
+      tiltY += (dy - tiltY) * 0.08;
+    }
+
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ requires a user-gesture permission request
+      header.addEventListener('touchstart', function reqPerm() {
+        DeviceOrientationEvent.requestPermission()
+          .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
+          .catch(() => {});
+        header.removeEventListener('touchstart', reqPerm);
+      }, { once: true, passive: true });
+    } else {
+      window.addEventListener('deviceorientation', onOrientation);
+    }
+  }
+  setupTilt();
 
   // Mouse click (desktop only — skip if touch already handled it)
   header.addEventListener('click', e => {
@@ -916,5 +965,6 @@ function initHeaderParticles(data) {
   canvas.height = header.offsetHeight * dpr0;
   ctx.setTransform(dpr0, 0, 0, dpr0, 0, 0);
   buildDots();
+  updateRect();
   tick();
 }
