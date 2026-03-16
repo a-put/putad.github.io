@@ -739,7 +739,7 @@ function initHeaderParticles(data) {
     }
 
     // Advance and cull ripples
-    for (const rip of ripples) rip.r += 4;
+    for (const rip of ripples) rip.r += 2.5;
     ripples = ripples.filter(rip => rip.r < RIPPLE_MAX_R);
 
     // ── Draw connections (batched into alpha buckets) ─────────
@@ -750,8 +750,10 @@ function initHeaderParticles(data) {
         const dy = dots[i].y - dots[j].y;
         const d2 = dx * dx + dy * dy;
         if (d2 < CR2) {
-          const bi = Math.min(BUCKETS - 1,
-            Math.floor((1 - Math.sqrt(d2) / CONNECT_RADIUS) * BUCKETS));
+          const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
+          if (depthSim < 0.15) continue; // skip cross-layer connections
+          const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
+          const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
           buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
         }
       }
@@ -789,8 +791,8 @@ function initHeaderParticles(data) {
         for (const rip of ripples) {
           const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
           const ring = Math.abs(rdist - rip.r);
-          if (ring < 35) {
-            const rf = (1 - ring / 35) * (1 - rip.r / RIPPLE_MAX_R);
+          if (ring < 60) {
+            const rf = (1 - ring / 60) * (1 - rip.r / RIPPLE_MAX_R);
             if (rf > rippleFactor) rippleFactor = rf;
           }
         }
@@ -799,7 +801,7 @@ function initHeaderParticles(data) {
         dr = Math.round(90 + 120 * blend);
         dg = Math.round(110 + 110 * blend);
         db = Math.round(210 + 45 * blend);
-        baseAlpha = Math.min(1, baseAlpha + Math.max(dispFactor, rippleFactor) * 0.35);
+        baseAlpha = Math.min(1, baseAlpha + dispFactor * 0.35 + rippleFactor * 0.7);
       }
 
       ctx.fillStyle = `rgba(${dr},${dg},${db},${baseAlpha.toFixed(2)})`;
