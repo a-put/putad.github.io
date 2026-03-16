@@ -69,7 +69,7 @@
       "bullets": [
         "Led R&D of optical computing hardware achieving first room-temperature demonstration of cascadable, universal polariton logic gates — enabling all-optical Boolean operations without electronic conversion (Nature Communications, 2024).",
         "Designed novel neuromorphic device architecture using Bose-Einstein condensates for massively parallel optical processing with sub-nanosecond switching speeds.",
-        "Developed programmable spatial control system for optical computing elements using SLMs and real-time feedback, enabling reconfigurable logic architectures (Phys. Rev. Lett., 2023).",
+        "Developed programmable spatial control system for optical computing elements using SLMs and real-time feedback, enabling reconfigurable architectures (Phys. Rev. Lett., 2023).",
         "Built end-to-end hardware-software stack: optical setup → real-time acquisition (100+ GB/day) → automated analysis pipeline, reducing experiment iteration cycles by 5×.",
         "Secured $340K in grant funding as PI/Co-I for optical computing research."
       ]
@@ -84,7 +84,7 @@
         "Developed computational models for coherent light-matter interactions, validated against experimental data for predictive device design.",
         "Built automated optical characterization systems integrating ultrafast lasers, spatial light modulators, and high-speed detectors with software control.",
         "Investigated novel material systems (organic semiconductors, perovskites) for room-temperature optical computing applications.",
-        "Collaborated with device fabrication teams to optimize microcavity structures for polariton condensation thresholds."
+        "Collaborated with device fabrication teams to optimize microcavity structures for strongly interacting light-matter systems."
       ]
     },
     {
@@ -92,26 +92,14 @@
       "company": "Skoltech",
       "period": "Nov 2018 – Dec 2022",
       "location": "Moscow, Russia",
-      "bullets": [
-        "Demonstrated first nanosecond-scale optical switching in organic polariton devices — 1000× faster than previous organic systems, enabling viable clock speeds for optical computing (Appl. Phys. Lett., 2020 — Editor's Choice).",
-        "Developed computational models for coherent light-matter interactions, validated against experimental data for predictive device design.",
-        "Built automated optical characterization systems integrating ultrafast lasers, spatial light modulators, and high-speed detectors with software control.",
-        "Investigated novel material systems (organic semiconductors, perovskites) for room-temperature optical computing applications.",
-        "Collaborated with device fabrication teams to optimize microcavity structures for polariton condensation thresholds."
-      ]
+      "bullets": []
     },
     {
       "role": "Bachelor/Master Student",
       "company": "Lomonosov Moscow State University",
       "period": "Nov 2012 – Dec 2018",
       "location": "Moscow, Russia",
-      "bullets": [
-        "Demonstrated first nanosecond-scale optical switching in organic polariton devices — 1000× faster than previous organic systems, enabling viable clock speeds for optical computing (Appl. Phys. Lett., 2020 — Editor's Choice).",
-        "Developed computational models for coherent light-matter interactions, validated against experimental data for predictive device design.",
-        "Built automated optical characterization systems integrating ultrafast lasers, spatial light modulators, and high-speed detectors with software control.",
-        "Investigated novel material systems (organic semiconductors, perovskites) for room-temperature optical computing applications.",
-        "Collaborated with device fabrication teams to optimize microcavity structures for polariton condensation thresholds."
-      ]
+      "bullets": []
     }
   ],
   "publications": [
