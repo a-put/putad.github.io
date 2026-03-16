@@ -960,12 +960,12 @@ function initHeaderParticles(data) {
     }
 
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+ — request on first touch anywhere on the page
-      document.addEventListener('touchstart', function reqPerm() {
+      // iOS 13+ — requestPermission must be called from a click event
+      document.addEventListener('click', function reqPerm() {
         DeviceOrientationEvent.requestPermission()
           .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
           .catch(() => {});
-      }, { once: true, passive: true });
+      }, { once: true });
     } else {
       window.addEventListener('deviceorientation', onOrientation);
     }
