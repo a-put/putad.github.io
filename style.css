@@ -541,19 +541,20 @@ html[data-theme="dark"] .badge-gold {
 }
 
 .submit-btn {
-  background: var(--accent);
-  color: white;
+  background: #3a3a3c;
+  color: #e5e5ea;
   border: none;
   border-radius: 980px;
   padding: 0.65rem 1.6rem;
   font-family: var(--font);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: opacity 0.2s;
 }
 
-.submit-btn:hover { opacity: 0.85; }
+.submit-btn:hover { opacity: 0.75; }
 
 /* ── Explainer card ──────────────────────────────────────── */
 html[data-theme="dark"] .explainer-card {
