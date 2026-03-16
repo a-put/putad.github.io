@@ -620,9 +620,7 @@ function initHeaderParticles(data) {
   const DOT_R          = data.particles?.dotRadius      ?? 1.5;
   const CONNECT_RADIUS = data.particles?.connectRadius  ?? 55;
   const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
-  const EDGE_ZONE      = data.particles?.edgeZone       ?? 55;
-  const EDGE_LEN       = data.particles?.edgeLineLen    ?? 28;
-  const EDGE_ALPHA     = data.particles?.edgeAlpha      ?? 0.13;
+  const MARGIN         = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP      = data.particles?.driftAmplitude ?? 12;
   const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.0004;
   const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
@@ -649,14 +647,17 @@ function initHeaderParticles(data) {
   function buildDots() {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.width / dpr, h = canvas.height / dpr;
+    const mx = w * MARGIN, my = h * MARGIN;
+    const W2 = w + 2 * mx, H2 = h + 2 * my;
+    const total = Math.round(COUNT * (W2 * H2) / (w * h));
     dots = [];
-    const cols = Math.ceil(Math.sqrt(COUNT * (w / h)));
-    const rows = Math.ceil(COUNT / cols);
-    const cw = w / cols, ch = h / rows;
-    for (let r = 0; r < rows && dots.length < COUNT; r++) {
-      for (let c = 0; c < cols && dots.length < COUNT; c++) {
-        const hx = (c + 0.2 + Math.random() * 0.6) * cw;
-        const hy = (r + 0.2 + Math.random() * 0.6) * ch;
+    const cols = Math.ceil(Math.sqrt(total * (W2 / H2)));
+    const rows = Math.ceil(total / cols);
+    const cw = W2 / cols, ch = H2 / rows;
+    for (let r = 0; r < rows && dots.length < total; r++) {
+      for (let c = 0; c < cols && dots.length < total; c++) {
+        const hx = -mx + (c + 0.2 + Math.random() * 0.6) * cw;
+        const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
         dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0 });
       }
     }
@@ -748,29 +749,6 @@ function initHeaderParticles(data) {
         ctx.moveTo(lines[k], lines[k + 1]);
         ctx.lineTo(lines[k + 2], lines[k + 3]);
       }
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // ── Edge tendrils ─────────────────────────────────────────
-    ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
-    ctx.lineWidth   = 1;
-    for (const d of dots) {
-      const dLeft  = d.x,     dRight = W - d.x;
-      const dTop   = d.y,     dBot   = H - d.y;
-      const dEdge  = Math.min(dLeft, dRight, dTop, dBot);
-      if (dEdge >= EDGE_ZONE) continue;
-      const factor = 1 - dEdge / EDGE_ZONE;
-      // Direction toward nearest edge
-      let ex = 0, ey = 0;
-      if (dEdge === dLeft)  ex = -1;
-      else if (dEdge === dRight) ex =  1;
-      else if (dEdge === dTop)   ey = -1;
-      else                       ey =  1;
-      ctx.globalAlpha = factor * EDGE_ALPHA;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x + ex * EDGE_LEN * factor, d.y + ey * EDGE_LEN * factor);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
