@@ -620,7 +620,7 @@ function initHeaderParticles(data) {
   const ctx = canvas.getContext('2d');
   const header = canvas.closest('header');
 
-  const COUNT = data.particles?.count ?? 220;
+  const COUNT = data.particles?.count ?? 340;
   const REPEL_RADIUS = data.particles?.repelRadius ?? 90;
   const REPEL_STR = data.particles?.repelStrength ?? 4;
   const SPRING = data.particles?.spring ?? 0.06;
@@ -633,11 +633,29 @@ function initHeaderParticles(data) {
   const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0006;
   const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
+  const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
+  const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
   const CR2 = CONNECT_RADIUS * CONNECT_RADIUS;
+  const DR2 = DOT_REPEL_R * DOT_REPEL_R;
 
   const BUCKETS = 5;
   const buckets = Array.from({ length: BUCKETS }, () => []);
-  let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
+  const TURB_DECAY   = 0.93;
+  const TURB_SCALE   = 0.04;
+  const TURB_MAX     = 3.0;
+  const GRAVITY_STR  = 0.018; // peak downward force at full scroll
+  let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
+      prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
+      scrollProgress = 0;
+
+  // Cache scroll progress — avoid reflow inside rAF
+  function updateScroll() {
+    const scrollMax = document.body.scrollHeight - window.innerHeight;
+    scrollProgress = scrollMax > 0 ? window.scrollY / scrollMax : 0;
+  }
+  window.addEventListener('scroll', updateScroll, { passive: true });
+  window.addEventListener('resize', updateScroll, { passive: true });
+  updateScroll();
 
   // Pseudo-noise from superimposed sines — no library needed
   function noise(x, y) {
@@ -694,20 +712,33 @@ function initHeaderParticles(data) {
   }
 
   function tick() {
-    t += DRIFT_SPEED;
+    t = (t + DRIFT_SPEED) % (Math.PI * 2000);
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr, H = canvas.height / dpr;
     ctx.clearRect(0, 0, W, H);
 
     const [cr, cg, cb] = getColor();
 
+    // ── Cursor velocity → turbulence ─────────────────────────
+    if (prevMouse.x > -9000) {
+      const speed = Math.hypot(mouse.x - prevMouse.x, mouse.y - prevMouse.y);
+      turbulence = Math.min(TURB_MAX, Math.max(turbulence * TURB_DECAY, speed * TURB_SCALE));
+    } else {
+      turbulence *= TURB_DECAY;
+    }
+    prevMouse.x = mouse.x;
+    prevMouse.y = mouse.y;
+
+    // ── Scroll gravity ───────────────────────────────────────
+    const gravityY = (scrollProgress - 0.5) * GRAVITY_STR;
+
     // ── Physics ──────────────────────────────────────────────
     for (const d of dots) {
-      // Cursor repulsion — shallow dots flee faster
+      // Cursor repulsion — shallow dots flee faster, turbulence amplifies
       const mx = d.x - mouse.x, my = d.y - mouse.y;
       const mdist = Math.hypot(mx, my);
       if (mdist < REPEL_RADIUS && mdist > 0) {
-        const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth);
+        const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
         d.vx += (mx / mdist) * f * REPEL_STR;
         d.vy += (my / mdist) * f * REPEL_STR;
       }
@@ -724,6 +755,9 @@ function initHeaderParticles(data) {
         }
       }
 
+      // Scroll gravity tilt
+      d.vy += gravityY;
+
       // Spring toward noise-drifted home target
       const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
       const tx = d.hx + Math.cos(angle) * DRIFT_AMP;
@@ -734,6 +768,27 @@ function initHeaderParticles(data) {
       const damp = DAMPING + 0.12 * (1 - d.depth);
       d.vx *= damp;
       d.vy *= damp;
+    }
+
+    // ── Dot–dot soft repulsion (before position integration) ──
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = dots[i].x - dots[j].x;
+        const dy = dots[i].y - dots[j].y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < DR2 && d2 > 0) {
+          const dist = Math.sqrt(d2);
+          const f = (1 - dist / DOT_REPEL_R) * DOT_REPEL_STR;
+          const fx = (dx / dist) * f;
+          const fy = (dy / dist) * f;
+          dots[i].vx += fx; dots[i].vy += fy;
+          dots[j].vx -= fx; dots[j].vy -= fy;
+        }
+      }
+    }
+
+    // ── Integrate positions ───────────────────────────────────
+    for (const d of dots) {
       d.x += d.vx;
       d.y += d.vy;
     }

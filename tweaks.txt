@@ -1,0 +1,55 @@
+# Particle field — tunable constants
+# Edit values in main.js (function initHeaderParticles)
+# All constants are near the top of the function (~lines 623–639)
+
+── Dots ────────────────────────────────────────────────────────
+COUNT           = 220     Number of dots in the visible canvas area.
+                          Total on canvas is ~COUNT × 1.96 (margin extension).
+
+DOT_R           = 1.5     Base dot radius in px. Depth scaling applies on top:
+                          actual radius = DOT_R × (0.4 + 0.9 × depth)
+
+── Motion ──────────────────────────────────────────────────────
+SPRING          = 0.06    How strongly dots pull back to their home position.
+                          Higher → snappier return. Lower → sluggish.
+
+DAMPING         = 0.82    Velocity multiplier per frame (0–1).
+                          Higher → dots glide longer. Lower → stop faster.
+                          Deep dots get +0.12 on top of this (more sluggish).
+
+DRIFT_AMP       = 20      How far (px) dots wander from home via noise drift.
+DRIFT_SPEED     = 0.0006  How fast the noise flow pattern shifts over time.
+                          Higher → faster-changing currents.
+
+── Cursor repulsion ────────────────────────────────────────────
+REPEL_RADIUS    = 90      Cursor influence radius in px.
+REPEL_STR       = 4       Peak repulsion force at zero distance.
+                          Shallow dots (depth≈1) feel full force;
+                          deep dots (depth≈0) feel 30% of it.
+
+── Cursor velocity turbulence ──────────────────────────────────
+TURB_SCALE      = 0.04    How much cursor speed (px/frame) feeds into turbulence.
+                          At 25px/frame swipe → turbulence ≈ 1 → force doubles.
+TURB_DECAY      = 0.93    Decay per frame. At 60fps: ~0.5s to fade out.
+                          Lower → faster decay. Higher → spike lingers longer.
+TURB_MAX        = 3.0     Cap on turbulence multiplier (max 4× repulsion).
+
+── Dot–dot soft body ───────────────────────────────────────────
+DOT_REPEL_R     = 18      Distance (px) within which dots push each other apart.
+DOT_REPEL_STR   = 0.25    Peak force of dot–dot repulsion.
+                          Higher → bouncier collisions.
+
+── Connections ─────────────────────────────────────────────────
+CONNECT_RADIUS  = 70      Max distance (px) for drawing a line between two dots.
+                          Larger → denser web. Smaller → sparser.
+CONNECT_ALPHA   = 0.18    Max opacity of connection lines.
+
+── Ripple ──────────────────────────────────────────────────────
+RIPPLE_MAX_R    = 200     How far (px) a ripple expands before dying.
+RIPPLE_STR      = 7       Peak outward force on dots as the ring passes through.
+                          (Ripple speed is 3.5 px/frame — edit rip.r += 3.5)
+
+── Layout ──────────────────────────────────────────────────────
+MARGIN          = 0.20    Fraction of canvas size added as invisible border.
+                          Dots outside this area form connections that enter
+                          the visible canvas from the edges.
