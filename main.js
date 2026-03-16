@@ -650,13 +650,13 @@ function initHeaderParticles(data) {
 
   const BUCKETS = 5;
   const buckets = Array.from({ length: BUCKETS }, () => []);
-  const TURB_DECAY   = 0.93;
-  const TURB_SCALE   = 0.04;
-  const TURB_MAX     = 3.0;
-  const GRAVITY_STR  = 20;   // max vertical home-offset (px) at full scroll
+  const TURB_DECAY = 0.93;
+  const TURB_SCALE = 0.04;
+  const TURB_MAX = 3.0;
+  const GRAVITY_STR = 10;   // max vertical home-offset (px) at full scroll
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
-      prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
-      scrollProgress = 0;
+    prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
+    scrollProgress = 0;
 
   // Cache scroll progress — avoid reflow inside rAF
   function updateScroll() {
