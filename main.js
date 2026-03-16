@@ -657,7 +657,8 @@ function initHeaderParticles(data) {
   const TILT_AMP    = 30;   // max px offset for near dots (depth=1) at full tilt
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
-    scrollProgress = 0, tiltX = 0, tiltY = 0;
+    scrollProgress = 0, tiltX = 0, tiltY = 0,
+    canvasRect = { left: 0, top: 0 };
 
   // Cache scroll progress and canvas rect — avoid reflow inside rAF
   function updateScroll() {
@@ -706,7 +707,6 @@ function initHeaderParticles(data) {
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
   }
 
-  let canvasRect = { left: 0, top: 0 };
   function updateRect() { canvasRect = canvas.getBoundingClientRect(); }
 
   let resizeTimer;
