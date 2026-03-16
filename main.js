@@ -874,10 +874,30 @@ function initHeaderParticles(data) {
     mouse.y = e.clientY - r.top;
   });
   header.addEventListener('mouseleave', () => { mouse.x = mouse.y = -9999; });
-  header.addEventListener('click', e => spawnRipple(e.clientX, e.clientY));
+
+  // Touch: repulsion tracking + ripple on tap; suppress the synthetic click
+  let touchFired = false;
   header.addEventListener('touchstart', e => {
+    touchFired = true;
+    const r = canvas.getBoundingClientRect();
+    const t0 = e.touches[0];
+    mouse.x = t0.clientX - r.left;
+    mouse.y = t0.clientY - r.top;
     Array.from(e.touches).forEach(touch => spawnRipple(touch.clientX, touch.clientY));
   }, { passive: true });
+  header.addEventListener('touchmove', e => {
+    const r = canvas.getBoundingClientRect();
+    const t0 = e.touches[0];
+    mouse.x = t0.clientX - r.left;
+    mouse.y = t0.clientY - r.top;
+  }, { passive: true });
+  header.addEventListener('touchend', () => { mouse.x = mouse.y = -9999; }, { passive: true });
+
+  // Mouse click (desktop only — skip if touch already handled it)
+  header.addEventListener('click', e => {
+    if (touchFired) { touchFired = false; return; }
+    spawnRipple(e.clientX, e.clientY);
+  });
   window.addEventListener('resize', resize);
 
   // Initial setup — run immediately, not debounced
