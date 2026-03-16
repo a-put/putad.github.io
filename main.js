@@ -94,10 +94,10 @@ function renderHeader(data) {
 
   const linksEl = document.getElementById('header-links');
   const linkDefs = [
-    { label: 'LinkedIn', href: data.linkedin || null,                       light: 'assets/linkedin.png',  dark: 'assets/linkedin_bw.png'  },
-    { label: 'Facebook', href: data.facebook || null,                       light: 'assets/facebook.png',  dark: 'assets/facebook_bw.png'  },
-    { label: 'Telegram', href: data.telegram || null,                       light: 'assets/telegram.png',  dark: 'assets/telegram_bw.png'  },
-    { label: 'Email',    href: data.email ? `mailto:${data.email}` : null,  light: 'assets/mail.png',      dark: 'assets/mail_bw.png'      },
+    { label: 'LinkedIn', href: data.linkedin || null, light: 'assets/linkedin.png', dark: 'assets/linkedin_bw.png' },
+    { label: 'Facebook', href: data.facebook || null, light: 'assets/facebook.png', dark: 'assets/facebook_bw.png' },
+    { label: 'Telegram', href: data.telegram || null, light: 'assets/telegram.png', dark: 'assets/telegram_bw.png' },
+    { label: 'Email', href: data.email ? `mailto:${data.email}` : null, light: 'assets/mail.png', dark: 'assets/mail_bw.png' },
   ];
   linkDefs.forEach(({ label, href, light, dark }) => {
     if (!href) return;
@@ -109,7 +109,7 @@ function renderHeader(data) {
     a.setAttribute('aria-label', label);
     const img = document.createElement('img');
     img.dataset.iconLight = light;
-    img.dataset.iconDark  = dark;
+    img.dataset.iconDark = dark;
     img.alt = label;
     a.appendChild(img);
     linksEl.appendChild(a);
@@ -180,8 +180,8 @@ const DOWNLOAD_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="non
 function renderPublications(data) {
   const profilesEl = document.getElementById('pub-profiles');
   const profiles = [
-    { label: 'ORCID',          href: data.orcid         || null, icon: 'assets/orcid.png' },
-    { label: 'Google Scholar', href: data.googleScholar  || null, icon: 'assets/GoogleScholar.png' },
+    { label: 'ORCID', href: data.orcid || null, icon: 'assets/orcid.png' },
+    { label: 'Google Scholar', href: data.googleScholar || null, icon: 'assets/GoogleScholar.png' },
   ];
   profiles.forEach(({ label, href, icon }) => {
     if (!href) return;
@@ -236,13 +236,13 @@ function renderPublications(data) {
 
 function openPubModal(pub) {
   document.getElementById('pm-journal').textContent = `${pub.journal} · ${pub.year}`;
-  document.getElementById('pm-title').textContent   = pub.title;
-  document.getElementById('pm-layman').textContent  = pub.layman;
+  document.getElementById('pm-title').textContent = pub.title;
+  document.getElementById('pm-layman').textContent = pub.layman;
 
   const imgWrap = document.getElementById('pm-img-wrap');
-  const img     = document.getElementById('pm-img');
-  const modal   = document.getElementById('pub-modal');
-  const card    = document.getElementById('pub-modal-card');
+  const img = document.getElementById('pm-img');
+  const modal = document.getElementById('pub-modal');
+  const card = document.getElementById('pub-modal-card');
 
   // Center horizontally over the publications main column
   const mainRect = document.querySelector('.page-layout > main').getBoundingClientRect();
@@ -269,7 +269,7 @@ function openPubModal(pub) {
 // Modal dismiss
 (function () {
   const modal = document.getElementById('pub-modal');
-  const card  = document.getElementById('pub-modal-card');
+  const card = document.getElementById('pub-modal-card');
   modal.addEventListener('click', () => modal.classList.remove('open'));
   card.addEventListener('click', e => e.stopPropagation());
   document.getElementById('pub-modal-close').addEventListener('click', () => modal.classList.remove('open'));
@@ -300,7 +300,7 @@ function renderExplainer(data) {
   el.className = 'explainer-card';
   el.innerHTML = `
     ${headline ? `<div class="explainer-headline">${headline}</div>` : ''}
-    ${body     ? `<p class="explainer-body">${body}</p>` : ''}
+    ${body ? `<p class="explainer-body">${body}</p>` : ''}
   `;
 }
 
@@ -320,26 +320,34 @@ function renderTimeline(data) {
 
   (data.experience || []).forEach(job => {
     const year = firstYear(job.period);
-    if (year) events.push({ type: 'work', year, title: job.role,
-      subtitle: `${job.company} · ${job.location}`, period: job.period });
+    if (year) events.push({
+      type: 'work', year, title: job.role,
+      subtitle: `${job.company} · ${job.location}`, period: job.period
+    });
   });
 
   (data.education || []).forEach(item => {
     const year = lastYear(item.period);
-    if (year) events.push({ type: 'education', year, title: item.degree,
-      subtitle: `${item.institution} · ${item.location}`, period: item.period });
+    if (year) events.push({
+      type: 'education', year, title: item.degree,
+      subtitle: `${item.institution} · ${item.location}`, period: item.period
+    });
   });
 
   (data.recognition || []).forEach(item => {
     const year = firstYear(item.year);
-    if (year) events.push({ type: 'award', year, title: item.title,
-      subtitle: null, period: String(item.year), url: item.url || null });
+    if (year) events.push({
+      type: 'award', year, title: item.title,
+      subtitle: null, period: String(item.year), url: item.url || null
+    });
   });
 
   (data.publications || []).forEach(pub => {
     const year = parseInt(pub.year, 10);
-    if (year) events.push({ type: 'publication', year, title: pub.title,
-      subtitle: `${pub.journal} · ${pub.ref}`, period: null });
+    if (year) events.push({
+      type: 'publication', year, title: pub.title,
+      subtitle: `${pub.journal} · ${pub.ref}`, period: null
+    });
   });
 
   events.sort((a, b) => b.year - a.year);
@@ -363,7 +371,7 @@ function renderTimeline(data) {
       <div class="tl-card">
         <div class="tl-card-title">${titleHtml}</div>
         ${ev.subtitle ? `<div class="tl-card-sub">${ev.subtitle}</div>` : ''}
-        ${ev.period   ? `<div class="tl-card-period">${ev.period}</div>` : ''}
+        ${ev.period ? `<div class="tl-card-period">${ev.period}</div>` : ''}
       </div>
     `;
     container.appendChild(item);
@@ -409,7 +417,7 @@ async function fetchOgImage(url) {
     if (!res.ok) return null;
     const { contents } = await res.json();
     const m = contents.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-           || contents.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+      || contents.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
     return m ? m[1] : null;
   } catch {
     return null;
@@ -463,9 +471,9 @@ function makeMediaListRow(item) {
 }
 
 function renderMedia(data) {
-  const container  = document.getElementById('media-list');
+  const container = document.getElementById('media-list');
   const mediaItems = data.media || [];
-  const groups     = data.media_groups || [];
+  const groups = data.media_groups || [];
 
   if (mediaItems.length === 0 && groups.length === 0) {
     container.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.875rem;">No media entries yet.</p>';
@@ -521,7 +529,7 @@ function updateSocialIcons() {
 (function () {
   const STORAGE_KEY = 'cv-theme';
   const html = document.documentElement;
-  const btn  = document.getElementById('theme-toggle');
+  const btn = document.getElementById('theme-toggle');
   const icon = document.getElementById('theme-icon');
 
   function applyTheme(theme) {
@@ -555,8 +563,8 @@ function updateSocialIcons() {
 
 // ── Contact ────────────────────────────────────────────────────
 function setupContact(data) {
-  const form      = document.getElementById('contact-form');
-  const status    = document.getElementById('form-status');
+  const form = document.getElementById('contact-form');
+  const status = document.getElementById('form-status');
   const submitBtn = document.getElementById('submit-btn');
   const endpoint = data.contact?.formspree_endpoint;
 
@@ -609,41 +617,41 @@ function initHeaderParticles(data) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   const canvas = document.getElementById('header-canvas');
-  const ctx    = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
   const header = canvas.closest('header');
 
-  const COUNT          = data.particles?.count          ?? 220;
-  const REPEL_RADIUS   = data.particles?.repelRadius    ?? 90;
-  const REPEL_STR      = data.particles?.repelStrength  ?? 4;
-  const SPRING         = data.particles?.spring         ?? 0.06;
-  const DAMPING        = data.particles?.damping        ?? 0.82;
-  const DOT_R          = data.particles?.dotRadius      ?? 1.5;
-  const CONNECT_RADIUS = data.particles?.connectRadius  ?? 65;
-  const CONNECT_ALPHA  = data.particles?.connectAlpha   ?? 0.18;
-  const MARGIN         = 0.20; // fraction of canvas to extend grid beyond edges
-  const DRIFT_AMP      = data.particles?.driftAmplitude ?? 12;
-  const DRIFT_SPEED    = data.particles?.driftSpeed     ?? 0.0004;
-  const RIPPLE_MAX_R   = data.particles?.rippleRadius   ?? 200;
-  const RIPPLE_STR     = data.particles?.rippleStrength ?? 7;
-  const CR2            = CONNECT_RADIUS * CONNECT_RADIUS;
+  const COUNT = data.particles?.count ?? 220;
+  const REPEL_RADIUS = data.particles?.repelRadius ?? 90;
+  const REPEL_STR = data.particles?.repelStrength ?? 4;
+  const SPRING = data.particles?.spring ?? 0.06;
+  const DAMPING = data.particles?.damping ?? 0.82;
+  const DOT_R = data.particles?.dotRadius ?? 1.5;
+  const CONNECT_RADIUS = data.particles?.connectRadius ?? 60;
+  const CONNECT_ALPHA = data.particles?.connectAlpha ?? 0.18;
+  const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
+  const DRIFT_AMP = data.particles?.driftAmplitude ?? 12;
+  const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0004;
+  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
+  const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
+  const CR2 = CONNECT_RADIUS * CONNECT_RADIUS;
 
-  const BUCKETS  = 5;
-  const buckets  = Array.from({ length: BUCKETS }, () => []);
+  const BUCKETS = 5;
+  const buckets = Array.from({ length: BUCKETS }, () => []);
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 }, ripples = [], t = 0;
 
   // Pseudo-noise from superimposed sines — no library needed
   function noise(x, y) {
     return (Math.sin(x * 1.4 + y * 0.8) +
-            Math.sin(x * 0.6 - y * 1.3) +
-            Math.sin((x - y) * 1.1)) / 3;
+      Math.sin(x * 0.6 - y * 1.3) +
+      Math.sin((x - y) * 1.1)) / 3;
   }
 
   function getColor() {
-    const hasBg  = header.classList.contains('has-bg-image');
+    const hasBg = header.classList.contains('has-bg-image');
     const isDark = document.documentElement.dataset.theme === 'dark';
-    if (hasBg)  return [255, 255, 255];
+    if (hasBg) return [255, 255, 255];
     if (isDark) return [174, 174, 178];
-    return              [110, 110, 115];
+    return [110, 110, 115];
   }
 
   function buildDots() {
@@ -660,8 +668,9 @@ function initHeaderParticles(data) {
       for (let c = 0; c < cols && dots.length < total; c++) {
         const hx = -mx + (c + 0.2 + Math.random() * 0.6) * cw;
         const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
-        const depth = Math.random(); // 0 = deep/far, 1 = shallow/near
-        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth });
+        const depth = Math.random();
+        const phase = Math.random() * Math.PI * 2; // per-dot hue cycle offset
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase });
       }
     }
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
@@ -672,7 +681,7 @@ function initHeaderParticles(data) {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const dpr = window.devicePixelRatio || 1;
-      canvas.width  = header.offsetWidth  * dpr;
+      canvas.width = header.offsetWidth * dpr;
       canvas.height = header.offsetHeight * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       buildDots();
@@ -707,7 +716,7 @@ function initHeaderParticles(data) {
       for (const rip of ripples) {
         const rx = d.x - rip.x, ry = d.y - rip.y;
         const rdist = Math.hypot(rx, ry);
-        const ring  = Math.abs(rdist - rip.r);
+        const ring = Math.abs(rdist - rip.r);
         if (ring < 25 && rdist > 0) {
           const f = (1 - ring / 25) * RIPPLE_STR * (1 - rip.r / RIPPLE_MAX_R);
           d.vx += (rx / rdist) * f;
@@ -725,8 +734,8 @@ function initHeaderParticles(data) {
       const damp = DAMPING + 0.12 * (1 - d.depth);
       d.vx *= damp;
       d.vy *= damp;
-      d.x  += d.vx;
-      d.y  += d.vy;
+      d.x += d.vx;
+      d.y += d.vy;
     }
 
     // Advance and cull ripples
@@ -747,8 +756,8 @@ function initHeaderParticles(data) {
         }
       }
     }
-    ctx.lineWidth    = 1;
-    ctx.strokeStyle  = `rgb(${cr},${cg},${cb})`;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
     for (let bi = 0; bi < BUCKETS; bi++) {
       const lines = buckets[bi];
       if (!lines.length) continue;
@@ -763,12 +772,29 @@ function initHeaderParticles(data) {
     ctx.globalAlpha = 1;
 
     // ── Draw dots (back-to-front, depth-scaled size + opacity) ──
+    const isDark = document.documentElement.dataset.theme === 'dark';
     for (const d of dotsByDepth) {
-      const r     = DOT_R * (0.4 + 0.9 * d.depth);
-      const alpha = 0.2  + 0.6  * d.depth;
-      ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha.toFixed(2)})`;
+      const radius = DOT_R * (0.4 + 0.9 * d.depth);
+      let baseAlpha = 0.2 + 0.6 * d.depth;
+      let dr = cr, dg = cg, db = cb;
+
+      if (isDark) {
+        // Displacement from home → glow intensity
+        const disp = Math.hypot(d.x - d.hx, d.y - d.hy);
+        const dispFactor = Math.min(1, disp / 25);
+        // Slow per-dot hue cycle (deep blue → cool white)
+        const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.4;
+        const blend = Math.max(cycleFactor, dispFactor);
+        // deep blue [90,110,210] → cool white [210,220,255]
+        dr = Math.round(90 + 120 * blend);
+        dg = Math.round(110 + 110 * blend);
+        db = Math.round(210 + 45 * blend);
+        baseAlpha = Math.min(1, baseAlpha + dispFactor * 0.35);
+      }
+
+      ctx.fillStyle = `rgba(${dr},${dg},${db},${baseAlpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -789,7 +815,7 @@ function initHeaderParticles(data) {
 
   // Initial setup — run immediately, not debounced
   const dpr0 = window.devicePixelRatio || 1;
-  canvas.width  = header.offsetWidth  * dpr0;
+  canvas.width = header.offsetWidth * dpr0;
   canvas.height = header.offsetHeight * dpr0;
   ctx.setTransform(dpr0, 0, 0, dpr0, 0, 0);
   buildDots();
