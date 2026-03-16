@@ -14,7 +14,7 @@
   "telegram": "https://t.me/antonputintsev",
   "googleScholar": "https://scholar.google.com/citations?user=0DTNvukAAAAJ&hl=en",
   "orcid": "https://orcid.org/0000-0002-9192-1344",
-  "about": "Physicist and hardware researcher with 6+ years pioneering optical and neuromorphic computing architectures. Led the first demonstration of room-temperature universal logic gates using polariton condensates — a novel non-von Neumann computing paradigm with potential for massively parallel, low-power AI inference. Deep expertise in device physics, ultrafast optical systems, and hardware-software co-design. Published in Nature Communications and Physical Review Letters. Experienced in building real-time data acquisition systems and integrating novel hardware with software control stacks. Seeking to apply optical computing expertise to next-generation AI accelerator development.",
+  "about": "Physicist with 6+ years pioneering optical and neuromorphic computing architectures. Led the first demonstration of room-temperature universal logic gates using 'liquid light' polaritons — a novel non-von Neumann computing approach with potential for parallel, low-power AI inference. Deep expertise in condensed matter ohysics, device physics, ultrafast optical systems, sophisticated experimental setups, and hardware-software co-design. Published in Nature Communications and Physical Review Letters. Experienced in building real-time data acquisition systems and integrating novel hardware with software control stacks. Seeking to apply optical computing expertise to next-generation AI accelerator development. Passionate about scientific research, innovation, and the development of future technologies.",
   "education": [
     {
       "degree": "PhD, Physics",
@@ -67,11 +67,11 @@
       "period": "Dec 2024 – Present",
       "location": "Moscow, Russia",
       "bullets": [
+        "Secured $340K in grant funding as PI/Co-I for optical computing research.",
         "Led R&D of optical computing hardware achieving first room-temperature demonstration of cascadable, universal polariton logic gates — enabling all-optical Boolean operations without electronic conversion (Nature Communications, 2024).",
         "Designed novel neuromorphic device architecture using Bose-Einstein condensates for massively parallel optical processing with sub-nanosecond switching speeds.",
         "Developed programmable spatial control system for optical computing elements using SLMs and real-time feedback, enabling reconfigurable architectures (Phys. Rev. Lett., 2023).",
-        "Built end-to-end hardware-software stack: optical setup → real-time acquisition (100+ GB/day) → automated analysis pipeline, reducing experiment iteration cycles by 5×.",
-        "Secured $340K in grant funding as PI/Co-I for optical computing research."
+        "Built end-to-end hardware-software stack: optical setup → real-time acquisition (100+ GB/day) → automated analysis pipeline, reducing experiment iteration cycles by 5×."
       ]
     },
     {
