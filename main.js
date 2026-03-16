@@ -653,8 +653,9 @@ function initHeaderParticles(data) {
   const TURB_DECAY = 0.93;
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
-  const GRAVITY_STR = 10;   // max vertical home-offset (px) at full scroll
-  const TILT_AMP    = 30;   // max px offset for near dots (depth=1) at full tilt
+  const GRAVITY_STR   = 10;   // max vertical home-offset (px) at full scroll
+  const TILT_AMP      = 30;   // max px offset for near dots (depth=1) at full tilt
+  const WAKE_DURATION = 1000; // ms a dot stays "hot" after cursor contact
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
     scrollProgress = 0, tiltX = 0, tiltY = 0,
@@ -701,7 +702,7 @@ function initHeaderParticles(data) {
         const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
         const depth = Math.random();
         const phase = Math.random() * Math.PI * 2; // per-dot hue cycle offset
-        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase });
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase, lastDisplaced: 0 });
       }
     }
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
@@ -733,6 +734,7 @@ function initHeaderParticles(data) {
 
   function tick() {
     t = (t + DRIFT_SPEED) % (Math.PI * 2000);
+    const now = performance.now();
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr, H = canvas.height / dpr;
     ctx.clearRect(0, 0, W, H);
@@ -761,6 +763,7 @@ function initHeaderParticles(data) {
         const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
         d.vx += (mx / mdist) * f * REPEL_STR;
         d.vy += (my / mdist) * f * REPEL_STR;
+        d.lastDisplaced = now;
       }
 
       // Ripple ring forces
@@ -855,7 +858,7 @@ function initHeaderParticles(data) {
         const radius = DOT_R * (0.4 + 0.9 * d.depth);
         const disp = Math.hypot(d.x - d.hx, d.y - d.hy);
         const dispFactor = Math.min(1, disp / 25);
-        const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.4;
+        const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.65;
         let rippleFactor = 0;
         for (const rip of ripples) {
           const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
@@ -865,11 +868,12 @@ function initHeaderParticles(data) {
             if (rf > rippleFactor) rippleFactor = rf;
           }
         }
-        const blend = Math.max(cycleFactor, dispFactor, rippleFactor);
+        const wakeFactor = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+        const blend = Math.max(cycleFactor, dispFactor, rippleFactor, wakeFactor);
         const dr = Math.round(90  + 120 * blend);
         const dg = Math.round(110 + 110 * blend);
         const db = Math.round(210 +  45 * blend);
-        const alpha = Math.min(1, (0.2 + 0.6 * d.depth) + dispFactor * 0.35 + rippleFactor * 0.7);
+        const alpha = Math.min(1, (0.2 + 0.6 * d.depth) + dispFactor * 0.6 + rippleFactor * 0.7 + wakeFactor * 0.6);
         ctx.fillStyle = `rgba(${dr},${dg},${db},${alpha.toFixed(2)})`;
         ctx.beginPath();
         ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
@@ -887,6 +891,23 @@ function initHeaderParticles(data) {
         for (const d of dotsByDepth) {
           const alpha = 0.2 + 0.6 * d.depth;
           if (alpha >= alphaMin && alpha < alphaMax) {
+            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            ctx.moveTo(d.x + radius, d.y);
+            ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+          }
+        }
+        ctx.fill();
+      }
+      // Wake glow pass — batch hot dots into 4 alpha buckets
+      const WBUCKETS = 4;
+      for (let wi = 0; wi < WBUCKETS; wi++) {
+        const wMin = wi / WBUCKETS, wMax = (wi + 1) / WBUCKETS;
+        const wMid = ((wMin + wMax) / 2 * 0.45);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${wMid.toFixed(2)})`;
+        ctx.beginPath();
+        for (const d of dotsByDepth) {
+          const wf = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+          if (wf >= wMin && wf < wMax) {
             const radius = DOT_R * (0.4 + 0.9 * d.depth);
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
@@ -934,17 +955,16 @@ function initHeaderParticles(data) {
       const dx = e.gamma - calibX;
       const dy = e.beta  - calibY;
       // Low-pass filter to smooth sensor jitter
-      tiltX += (dx - tiltX) * 0.08;
-      tiltY += (dy - tiltY) * 0.08;
+      tiltX += (dx - tiltX) * 0.18;
+      tiltY += (dy - tiltY) * 0.18;
     }
 
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+ requires a user-gesture permission request
-      header.addEventListener('touchstart', function reqPerm() {
+      // iOS 13+ — request on first touch anywhere on the page
+      document.addEventListener('touchstart', function reqPerm() {
         DeviceOrientationEvent.requestPermission()
           .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
           .catch(() => {});
-        header.removeEventListener('touchstart', reqPerm);
       }, { once: true, passive: true });
     } else {
       window.addEventListener('deviceorientation', onOrientation);
