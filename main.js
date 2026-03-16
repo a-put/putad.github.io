@@ -24,19 +24,29 @@ function setHeaderHeight() {
 }
 
 function setupDesktopTabs() {
-  if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
-  const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'about';
-  document.querySelectorAll('.tab-section').forEach(s => {
-    s.classList.toggle('hidden', s.id !== `tab-${activeTab}`);
-  });
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('hidden'));
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.onclick = () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-section').forEach(s => s.classList.add('hidden'));
-      btn.classList.add('active');
-      document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+      document.getElementById(`tab-${btn.dataset.tab}`)
+        .scrollIntoView({ behavior: 'smooth' });
     };
   });
+
+  if (scrollObserver) scrollObserver.disconnect();
+  const headerH = document.querySelector('header').offsetHeight;
+  scrollObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id.replace('tab-', '');
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.tab === id);
+        });
+      }
+    });
+  }, { rootMargin: `-${headerH}px 0px -50% 0px` });
+
+  document.querySelectorAll('.tab-section').forEach(s => scrollObserver.observe(s));
 }
 
 function setupMobileTabs() {
@@ -80,7 +90,7 @@ function initTabs() {
 }
 
 mobileQuery.addEventListener('change', initTabs);
-window.addEventListener('resize', setHeaderHeight);
+window.addEventListener('resize', initTabs);
 initTabs();
 
 // ── Header ────────────────────────────────────────────────────
@@ -643,7 +653,7 @@ function initHeaderParticles(data) {
   const TURB_DECAY   = 0.93;
   const TURB_SCALE   = 0.04;
   const TURB_MAX     = 3.0;
-  const GRAVITY_STR  = 0.018; // peak downward force at full scroll
+  const GRAVITY_STR  = 0.06; // peak downward force at full scroll
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
       prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
       scrollProgress = 0;
