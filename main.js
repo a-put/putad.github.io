@@ -952,6 +952,31 @@ function initHeaderParticles(data) {
         }
         ctx.fill();
       }
+      // Ripple glow pass — dots briefly brighten as a ripple ring sweeps through
+      const RBUCKETS = 4;
+      for (let ri = 0; ri < RBUCKETS; ri++) {
+        const rMin = ri / RBUCKETS, rMax = (ri + 1) / RBUCKETS;
+        const rMid = (rMin + rMax) / 2 * 0.5;
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${rMid.toFixed(2)})`;
+        ctx.beginPath();
+        for (const d of dotsByDepth) {
+          let rf = 0;
+          for (const rip of ripples) {
+            const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
+            const ring = Math.abs(rdist - rip.r);
+            if (ring < 60) {
+              const v = (1 - ring / 60) * (1 - rip.r / RIPPLE_MAX_R);
+              if (v > rf) rf = v;
+            }
+          }
+          if (rf >= rMin && rf < rMax) {
+            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            ctx.moveTo(d.x + radius, d.y);
+            ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+          }
+        }
+        ctx.fill();
+      }
     }
 
     requestAnimationFrame(tick);
