@@ -653,7 +653,7 @@ function initHeaderParticles(data) {
   const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP = data.particles?.driftAmplitude ?? 20;
   const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0006;
-  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 700;
+  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
   const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
   const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
@@ -763,7 +763,7 @@ function initHeaderParticles(data) {
     const px = W * (0.5 + noise(pulseT, 314) * 0.30);
     const py = H * (0.5 + noise(314, pulseT) * 0.22);
     if (now - lastBeat > BEAT_INTERVAL) {
-      ripples.push({ x: px, y: py, r: 0, str: RIPPLE_STR * 0.03 });
+      ripples.push({ x: px, y: py, r: 0, str: RIPPLE_STR * 0.0 });
       lastBeat = now;
     }
 
