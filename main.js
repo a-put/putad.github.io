@@ -657,6 +657,7 @@ function initHeaderParticles(data) {
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
   const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
   const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
+  const HEARTBEAT = false; // set to false to disable the wandering heartbeat ripple
   const CR2 = CONNECT_RADIUS * CONNECT_RADIUS;
   const DR2 = DOT_REPEL_R * DOT_REPEL_R;
 
@@ -762,8 +763,8 @@ function initHeaderParticles(data) {
     // ── Wandering heartbeat ───────────────────────────────────
     const px = W * (0.5 + noise(pulseT, 314) * 0.30);
     const py = H * (0.5 + noise(314, pulseT) * 0.22);
-    if (now - lastBeat > BEAT_INTERVAL) {
-      ripples.push({ x: px, y: py, r: 0, str: RIPPLE_STR * 0.0 });
+    if (HEARTBEAT && now - lastBeat > BEAT_INTERVAL) {
+      ripples.push({ x: px, y: py, r: 0, str: RIPPLE_STR * 0.15 });
       lastBeat = now;
     }
 
