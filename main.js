@@ -289,9 +289,10 @@ function openPubModal(pub) {
     document.body.style.overflow = '';
   }
 
-  // Lock body scroll when modal opens
+  // Lock body scroll when modal opens (mobile only)
   new MutationObserver(() => {
-    if (modal.classList.contains('open')) document.body.style.overflow = 'hidden';
+    if (modal.classList.contains('open') && window.innerWidth <= 620)
+      document.body.style.overflow = 'hidden';
   }).observe(modal, { attributeFilter: ['class'] });
 
   modal.addEventListener('click', closeModal);
