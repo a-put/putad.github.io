@@ -653,7 +653,7 @@ function initHeaderParticles(data) {
   const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP = data.particles?.driftAmplitude ?? 20;
   const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0006;
-  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
+  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 700;
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
   const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
   const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
@@ -665,17 +665,20 @@ function initHeaderParticles(data) {
   const TURB_DECAY = 0.93;
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
-  const GRAVITY_STR   = 10;   // max vertical home-offset (px) at full scroll
-  const TILT_AMP      = 30;   // max px offset for near dots (depth=1) at full tilt
+  const GRAVITY_STR = 10;   // max vertical home-offset (px) at full scroll
+  const TILT_AMP = 30;   // max px offset for near dots (depth=1) at full tilt
   const WAKE_DURATION = 1000; // ms a dot stays "hot" after cursor contact
-  const ATTRACT_STR   = 3;    // peak attraction force toward cursor
-  const ATTRACT_R     = REPEL_RADIUS * 2.2; // attraction radius (wider than repulsion)
-  const EXPLODE_STR   = 10;   // outward burst velocity on release
+  const ATTRACT_STR = 3;    // peak attraction force toward cursor
+  const ATTRACT_R = REPEL_RADIUS * 2.2; // attraction radius (wider than repulsion)
+  const EXPLODE_STR = 10;   // outward burst velocity on release
+  const BEAT_INTERVAL = 2500; // ms between heartbeat ripples (30 bpm)
+  const PULSE_WANDER_SPEED = 0.00025; // how fast the heartbeat origin drifts
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
     scrollProgress = 0, tiltX = 0, tiltY = 0,
     canvasRect = { left: 0, top: 0 },
-    attracting = false, longPressTimer = null;
+    attracting = false, longPressTimer = null,
+    lastBeat = 0, pulseT = 0;
 
   // Cache scroll progress and canvas rect — avoid reflow inside rAF
   function updateScroll() {
@@ -745,15 +748,24 @@ function initHeaderParticles(data) {
   }
 
   function spawnRipple(clientX, clientY) {
-    ripples.push({ x: clientX - canvasRect.left, y: clientY - canvasRect.top, r: 0 });
+    ripples.push({ x: clientX - canvasRect.left, y: clientY - canvasRect.top, r: 0, str: RIPPLE_STR });
   }
 
   function tick() {
     t = (t + DRIFT_SPEED) % (Math.PI * 2000);
+    pulseT += PULSE_WANDER_SPEED;
     const now = performance.now();
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr, H = canvas.height / dpr;
     ctx.clearRect(0, 0, W, H);
+
+    // ── Wandering heartbeat ───────────────────────────────────
+    const px = W * (0.5 + noise(pulseT, 314) * 0.30);
+    const py = H * (0.5 + noise(314, pulseT) * 0.22);
+    if (now - lastBeat > BEAT_INTERVAL) {
+      ripples.push({ x: px, y: py, r: 0, str: RIPPLE_STR * 0.03 });
+      lastBeat = now;
+    }
 
     const [cr, cg, cb] = getColor();
 
@@ -797,7 +809,7 @@ function initHeaderParticles(data) {
         const rdist = Math.hypot(rx, ry);
         const ring = Math.abs(rdist - rip.r);
         if (ring < 25 && rdist > 0) {
-          const f = (1 - ring / 25) * RIPPLE_STR * (1 - rip.r / RIPPLE_MAX_R);
+          const f = (1 - ring / 25) * rip.str * (1 - rip.r / RIPPLE_MAX_R);
           d.vx += (rx / rdist) * f;
           d.vy += (ry / rdist) * f;
         }
@@ -895,9 +907,9 @@ function initHeaderParticles(data) {
         }
         const wakeFactor = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
         const blend = Math.max(cycleFactor, dispFactor, rippleFactor, wakeFactor);
-        const dr = Math.round(90  + 120 * blend);
+        const dr = Math.round(90 + 120 * blend);
         const dg = Math.round(110 + 110 * blend);
-        const db = Math.round(210 +  45 * blend);
+        const db = Math.round(210 + 45 * blend);
         const alpha = Math.min(1, (0.2 + 0.6 * d.depth) + dispFactor * 0.6 + rippleFactor * 0.7 + wakeFactor * 0.6);
         ctx.fillStyle = `rgba(${dr},${dg},${db},${alpha.toFixed(2)})`;
         ctx.beginPath();
@@ -1016,7 +1028,7 @@ function initHeaderParticles(data) {
       if (e.gamma === null) return;
       if (calibX === null) { calibX = e.gamma; calibY = e.beta; }
       const dx = e.gamma - calibX;
-      const dy = e.beta  - calibY;
+      const dy = e.beta - calibY;
       // Low-pass filter to smooth sensor jitter
       tiltX += (dx - tiltX) * 0.18;
       tiltY += (dy - tiltY) * 0.18;
@@ -1027,7 +1039,7 @@ function initHeaderParticles(data) {
       document.addEventListener('click', function reqPerm() {
         DeviceOrientationEvent.requestPermission()
           .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', onOrientation); })
-          .catch(() => {});
+          .catch(() => { });
       }, { once: true });
     } else {
       window.addEventListener('deviceorientation', onOrientation);
