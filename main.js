@@ -283,11 +283,22 @@ function openPubModal(pub) {
 (function () {
   const modal = document.getElementById('pub-modal');
   const card = document.getElementById('pub-modal-card');
-  modal.addEventListener('click', () => modal.classList.remove('open'));
+
+  function closeModal() {
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // Lock body scroll when modal opens
+  new MutationObserver(() => {
+    if (modal.classList.contains('open')) document.body.style.overflow = 'hidden';
+  }).observe(modal, { attributeFilter: ['class'] });
+
+  modal.addEventListener('click', closeModal);
   card.addEventListener('click', e => e.stopPropagation());
-  document.getElementById('pub-modal-close').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('pub-modal-close').addEventListener('click', closeModal);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') modal.classList.remove('open');
+    if (e.key === 'Escape') closeModal();
   });
 }());
 

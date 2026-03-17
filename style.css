@@ -1076,8 +1076,27 @@ html[data-theme="dark"] .pub-modal-img-wrap {
 }
 
 @media (max-width: 620px) {
+  /* Make modal itself the scroll container */
+  #pub-modal {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    align-items: flex-start;
+    padding: 1.5rem 1rem;
+  }
+
   .pub-modal-card {
+    position: relative;
+    top: auto;
+    left: 0 !important;   /* override JS inline style */
+    transform: translateY(24px) scale(0.95);
+    width: 100%;
+    margin: auto 0;
     flex-direction: column;
+  }
+
+  #pub-modal.open .pub-modal-card {
+    transform: translateY(0) scale(1);
   }
 
   .pub-modal-img-wrap {
