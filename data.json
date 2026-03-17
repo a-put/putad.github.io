@@ -104,51 +104,6 @@
   ],
   "publications": [
     {
-      "authors": "M. Misko* & A. D. Putintsev*, D. A. Sannikov, A. V. Zasedatelev, U. Scherf, P. G. Lagoudakis",
-      "title": "Temporal bandwidth of consecutive polariton condensation",
-      "corresponding": true,
-      "journal": "Phys. Rev. B",
-      "ref": "111, L161403",
-      "year": "2025",
-      "doi": "https://doi.org/10.1103/PhysRevB.111.L161403",
-      "pdf": "https://arxiv.org/abs/2407.21544",
-      "badges": [
-        "Letter"
-      ],
-      "layman": "Using a pump-pump optical configuration, researchers establish the intrinsic repetition rate limit of consecutive polariton condensates in an organic microcavity at room temperature. Residual polariton population from the first pulse seeds stimulated relaxation for the second, setting a lower bound on temporal separation for independent logic state operation. This behavior is governed by momentum-dependent bimolecular quenching between propagating polaritons and localized Frenkel excitons — a k-linear nonradiative loss channel captured by a Lindblad-based microscopic model — yielding an operational bandwidth of ~240 GHz, with cavity optimization simulations suggesting extension toward 0.5 THz.",
-      "image": "assets/PRBrr_v2.png",
-      "altmetric": {
-        "url": "https://aps.altmetric.com/details/165845054",
-        "label": "PRB Letter"
-      }
-    },
-    {
-      "authors": "M. D. Kolker, I. I. Krasionov, A. D. Putintsev, E. D. Grayfer, T. Cookson, D. Tatarinov, A. P. Pushkarev, D. A. Sannikov, P. G. Lagoudakis",
-      "title": "Room temperature broadband polariton lasing from a CsPbBr₃ perovskite plate",
-      "corresponding": false,
-      "journal": "Adv. Optical Mater.",
-      "ref": "2402543",
-      "year": "2025",
-      "doi": "https://doi.org/10.1002/adom.202402543",
-      "pdf": "https://doi.org/10.1002/adom.202402543",
-      "badges": [],
-      "layman": "Tunable polariton lasing is demonstrated at room temperature in an all-inorganic CsPbBr₃ perovskite microcavity with an adjustable air-gap, achieving the widest spectral tuning range reported for perovskite polariton lasers to date. The orthorhombic crystal symmetry induces a birefringence-driven mode splitting, enabling simultaneous condensation into two orthogonally polarized polariton branches. The demonstrated in situ tunability and compatibility with electrical injection position this platform as a strong candidate for compact coherent light sources and cascadable polariton logic gates at ambient conditions.",
-      "image": "assets/AOM25v2.png"
-    },
-    {
-      "authors": "A. D. Putintsev*, A. V. Zasedatelev, V. Shishkov, M. Misko, D. A. Sannikov, E. Andrianov, Y. Lozovik, U. Scherf, P. G. Lagoudakis",
-      "title": "Photon statistics of organic polariton condensates",
-      "corresponding": true,
-      "journal": "Phys. Rev. B",
-      "ref": "110, 045125",
-      "year": "2024",
-      "doi": "https://doi.org/10.1103/PhysRevB.110.045125",
-      "pdf": "https://doi.org/10.1103/PhysRevB.110.045125",
-      "badges": [],
-      "layman": "Using single-shot detection, researchers have measured the second-order coherence function g⁽²⁾(0) of organic polariton condensates at room temperature, finding values as low as 1.00034 ± 10⁻⁵ — intensity fluctuations only ~100 times the shot-noise limit, competitive with results previously achieved only at cryogenic temperatures. Crucially, reducing the condensate size increases quantum noise not due to enhanced spatial disorder, which was found to be size-independent, but due to kinetic losses from polariton outflow at the condensate boundary, suppressing thermalization and broadening the particle-number distribution. This contrasts sharply with conventional laser behavior and highlights the non-equilibrium nature of polariton condensation, while demonstrating its viability as a low-noise platform for room-temperature quantum photonic applications.",
-      "image": "assets/PRBg2.png"
-    },
-    {
       "authors": "D. Sannikov, A. V. Baranikov, A. D. Putintsev, M. Misko, A. V. Zasedatelev, U. Scherf, P. G. Lagoudakis",
       "title": "Room temperature, cascadable, all-optical polariton universal gates",
       "corresponding": false,
@@ -187,17 +142,23 @@
       }
     },
     {
-      "authors": "K. E. McGhee, A. D. Putintsev, R. Jayaprakash, K. Georgiou, M. E. O'Kane, R. C. Kilbride, E. J. Cassella, M. Cavazzini, D. A. Sannikov, P. G. Lagoudakis, D. G. Lidzey",
-      "title": "Polariton condensation in an organic microcavity utilising a hybrid metal-DBR mirror",
-      "corresponding": false,
-      "journal": "Sci. Rep.",
-      "ref": "11, 20879",
-      "year": "2021",
-      "doi": "https://doi.org/10.1038/s41598-021-00203-y",
-      "pdf": "https://www.researchgate.net/publication/355481147_Polariton_condensation_in_an_organic_microcavity_utilising_a_hybrid_metal-DBR_mirror",
-      "badges": [],
-      "layman": "Plain-language explanation coming soon.",
-      "image": ""
+      "authors": "M. Misko* & A. D. Putintsev*, D. A. Sannikov, A. V. Zasedatelev, U. Scherf, P. G. Lagoudakis",
+      "title": "Temporal bandwidth of consecutive polariton condensation",
+      "corresponding": true,
+      "journal": "Phys. Rev. B",
+      "ref": "111, L161403",
+      "year": "2025",
+      "doi": "https://doi.org/10.1103/PhysRevB.111.L161403",
+      "pdf": "https://arxiv.org/abs/2407.21544",
+      "badges": [
+        "Letter"
+      ],
+      "layman": "Using a pump-pump optical configuration, researchers establish the intrinsic repetition rate limit of consecutive polariton condensates in an organic microcavity at room temperature. Residual polariton population from the first pulse seeds stimulated relaxation for the second, setting a lower bound on temporal separation for independent logic state operation. This behavior is governed by momentum-dependent bimolecular quenching between propagating polaritons and localized Frenkel excitons — a k-linear nonradiative loss channel captured by a Lindblad-based microscopic model — yielding an operational bandwidth of ~240 GHz, with cavity optimization simulations suggesting extension toward 0.5 THz.",
+      "image": "assets/PRBrr_v2.png",
+      "altmetric": {
+        "url": "https://aps.altmetric.com/details/165845054",
+        "label": "PRB Letter"
+      }
     },
     {
       "authors": "A. D. Putintsev*, A. Zasedatelev, K. E. McGhee, T. Cookson, D. Sannikov, K. Georgiou, D. G. Lidzey, P. G. Lagoudakis",
@@ -213,6 +174,45 @@
       ],
       "layman": "Organic polariton condensates are typically limited to ultrashort lifetimes due to the localized nature of Frenkel excitons and rapid cavity decay. Using nanosecond non-resonant optical excitation with single-shot dispersion imaging, researchers demonstrate quasi-steady state polariton lasing in a strongly coupled BODIPY-based organic microcavity at room temperature, with a condensate lifetime exceeding the intrinsic polariton lifetime by four orders of magnitude. All canonical hallmarks of polariton condensation are confirmed, and the quasi-steady state regime is shown to bring organic systems closer to dynamic equilibrium conditions required for polariton hydrodynamics and condensate lattice studies, opening a pathway toward connected polariton devices and all-optical circuitry under ambient conditions.",
       "image": "assets/APLnanosec.png"
+    },
+    {
+      "authors": "A. D. Putintsev*, A. V. Zasedatelev, V. Shishkov, M. Misko, D. A. Sannikov, E. Andrianov, Y. Lozovik, U. Scherf, P. G. Lagoudakis",
+      "title": "Photon statistics of organic polariton condensates",
+      "corresponding": true,
+      "journal": "Phys. Rev. B",
+      "ref": "110, 045125",
+      "year": "2024",
+      "doi": "https://doi.org/10.1103/PhysRevB.110.045125",
+      "pdf": "https://doi.org/10.1103/PhysRevB.110.045125",
+      "badges": [],
+      "layman": "Using single-shot detection, researchers have measured the second-order coherence function g⁽²⁾(0) of organic polariton condensates at room temperature, finding values as low as 1.00034 ± 10⁻⁵ — intensity fluctuations only ~100 times the shot-noise limit, competitive with results previously achieved only at cryogenic temperatures. Crucially, reducing the condensate size increases quantum noise not due to enhanced spatial disorder, which was found to be size-independent, but due to kinetic losses from polariton outflow at the condensate boundary, suppressing thermalization and broadening the particle-number distribution. This contrasts sharply with conventional laser behavior and highlights the non-equilibrium nature of polariton condensation, while demonstrating its viability as a low-noise platform for room-temperature quantum photonic applications.",
+      "image": "assets/PRBg2.png"
+    },
+    {
+      "authors": "M. D. Kolker, I. I. Krasionov, A. D. Putintsev, E. D. Grayfer, T. Cookson, D. Tatarinov, A. P. Pushkarev, D. A. Sannikov, P. G. Lagoudakis",
+      "title": "Room temperature broadband polariton lasing from a CsPbBr₃ perovskite plate",
+      "corresponding": false,
+      "journal": "Adv. Optical Mater.",
+      "ref": "2402543",
+      "year": "2025",
+      "doi": "https://doi.org/10.1002/adom.202402543",
+      "pdf": "https://doi.org/10.1002/adom.202402543",
+      "badges": [],
+      "layman": "Tunable polariton lasing is demonstrated at room temperature in an all-inorganic CsPbBr₃ perovskite microcavity with an adjustable air-gap, achieving the widest spectral tuning range reported for perovskite polariton lasers to date. The orthorhombic crystal symmetry induces a birefringence-driven mode splitting, enabling simultaneous condensation into two orthogonally polarized polariton branches. The demonstrated in situ tunability and compatibility with electrical injection position this platform as a strong candidate for compact coherent light sources and cascadable polariton logic gates at ambient conditions.",
+      "image": "assets/AOM25v2.png"
+    },
+    {
+      "authors": "K. E. McGhee, A. D. Putintsev, R. Jayaprakash, K. Georgiou, M. E. O'Kane, R. C. Kilbride, E. J. Cassella, M. Cavazzini, D. A. Sannikov, P. G. Lagoudakis, D. G. Lidzey",
+      "title": "Polariton condensation in an organic microcavity utilising a hybrid metal-DBR mirror",
+      "corresponding": false,
+      "journal": "Sci. Rep.",
+      "ref": "11, 20879",
+      "year": "2021",
+      "doi": "https://doi.org/10.1038/s41598-021-00203-y",
+      "pdf": "https://www.researchgate.net/publication/355481147_Polariton_condensation_in_an_organic_microcavity_utilising_a_hybrid_metal-DBR_mirror",
+      "badges": [],
+      "layman": "Plain-language explanation coming soon.",
+      "image": ""
     }
   ],
   "skills": {
