@@ -668,10 +668,14 @@ function initHeaderParticles(data) {
   const GRAVITY_STR   = 10;   // max vertical home-offset (px) at full scroll
   const TILT_AMP      = 30;   // max px offset for near dots (depth=1) at full tilt
   const WAKE_DURATION = 1000; // ms a dot stays "hot" after cursor contact
+  const ATTRACT_STR   = 3;    // peak attraction force toward cursor
+  const ATTRACT_R     = REPEL_RADIUS * 2.2; // attraction radius (wider than repulsion)
+  const EXPLODE_STR   = 10;   // outward burst velocity on release
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
     scrollProgress = 0, tiltX = 0, tiltY = 0,
-    canvasRect = { left: 0, top: 0 };
+    canvasRect = { left: 0, top: 0 },
+    attracting = false, longPressTimer = null;
 
   // Cache scroll progress and canvas rect — avoid reflow inside rAF
   function updateScroll() {
@@ -768,14 +772,23 @@ function initHeaderParticles(data) {
 
     // ── Physics ──────────────────────────────────────────────
     for (const d of dots) {
-      // Cursor repulsion — shallow dots flee faster, turbulence amplifies
+      // Cursor interaction — repulsion normally, attraction when gravity-well active
       const mx = d.x - mouse.x, my = d.y - mouse.y;
       const mdist = Math.hypot(mx, my);
-      if (mdist < REPEL_RADIUS && mdist > 0) {
-        const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
-        d.vx += (mx / mdist) * f * REPEL_STR;
-        d.vy += (my / mdist) * f * REPEL_STR;
-        d.lastDisplaced = now;
+      if (attracting) {
+        if (mdist < ATTRACT_R && mdist > 0) {
+          const f = (1 - mdist / ATTRACT_R) * (0.3 + 0.7 * d.depth);
+          d.vx -= (mx / mdist) * f * ATTRACT_STR; // negative = toward cursor
+          d.vy -= (my / mdist) * f * ATTRACT_STR;
+          d.lastDisplaced = now;
+        }
+      } else {
+        if (mdist < REPEL_RADIUS && mdist > 0) {
+          const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
+          d.vx += (mx / mdist) * f * REPEL_STR;
+          d.vy += (my / mdist) * f * REPEL_STR;
+          d.lastDisplaced = now;
+        }
       }
 
       // Ripple ring forces
@@ -932,13 +945,39 @@ function initHeaderParticles(data) {
     requestAnimationFrame(tick);
   }
 
+  // Burst dots outward from cursor — called on gravity-well release
+  function explode() {
+    const stamp = performance.now();
+    for (const d of dots) {
+      const ex = d.x - mouse.x, ey = d.y - mouse.y;
+      const edist = Math.hypot(ex, ey);
+      if (edist < ATTRACT_R && edist > 0) {
+        const f = 1 - edist / ATTRACT_R;
+        d.vx += (ex / edist) * f * EXPLODE_STR;
+        d.vy += (ey / edist) * f * EXPLODE_STR;
+        d.lastDisplaced = stamp;
+      }
+    }
+  }
+
   header.addEventListener('mousemove', e => {
     mouse.x = e.clientX - canvasRect.left;
     mouse.y = e.clientY - canvasRect.top;
   });
-  header.addEventListener('mouseleave', () => { mouse.x = mouse.y = -9999; });
+  header.addEventListener('mouseleave', () => {
+    mouse.x = mouse.y = -9999;
+    if (attracting) { attracting = false; explode(); }
+  });
 
-  // Touch: repulsion tracking + ripple on tap; suppress the synthetic click
+  // Desktop: Shift key toggles gravity well
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Shift' && !attracting && mouse.x > -9000) attracting = true;
+  });
+  window.addEventListener('keyup', e => {
+    if (e.key === 'Shift' && attracting) { attracting = false; explode(); }
+  });
+
+  // Touch: repulsion tracking + ripple on tap; long-press (500ms) = gravity well
   let touchFired = false;
   header.addEventListener('touchstart', e => {
     touchFired = true;
@@ -946,6 +985,10 @@ function initHeaderParticles(data) {
     const t0 = e.touches[0];
     mouse.x = t0.clientX - canvasRect.left;
     mouse.y = t0.clientY - canvasRect.top;
+    longPressTimer = setTimeout(() => {
+      attracting = true;
+      longPressTimer = null;
+    }, 500);
     Array.from(e.touches).forEach(touch => spawnRipple(touch.clientX, touch.clientY));
   }, { passive: true });
   header.addEventListener('touchmove', e => {
@@ -953,8 +996,16 @@ function initHeaderParticles(data) {
     mouse.x = t0.clientX - canvasRect.left;
     mouse.y = t0.clientY - canvasRect.top;
   }, { passive: true });
-  document.addEventListener('touchend',    () => { mouse.x = mouse.y = -9999; }, { passive: true });
-  document.addEventListener('touchcancel', () => { mouse.x = mouse.y = -9999; }, { passive: true });
+  document.addEventListener('touchend', () => {
+    clearTimeout(longPressTimer); longPressTimer = null;
+    if (attracting) { attracting = false; explode(); }
+    mouse.x = mouse.y = -9999;
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => {
+    clearTimeout(longPressTimer); longPressTimer = null;
+    attracting = false;
+    mouse.x = mouse.y = -9999;
+  }, { passive: true });
 
   // ── Device tilt parallax (mobile) ────────────────────────
   function setupTilt() {
