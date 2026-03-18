@@ -176,7 +176,7 @@ function renderHeader(data) {
     cv.setAttribute('aria-label', 'Download CV');
     cv.title = 'Download CV';
     cv.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9m0 0l-3-3m3 3l3-3"/><path d="M2 12v1.5a1 1 0 001 1h10a1 1 0 001-1V12"/></svg><span>CV</span>`;
-    linksEl.appendChild(cv);
+    document.querySelector('header').appendChild(cv);
   }
 
   if (data.avatar) {
@@ -722,7 +722,8 @@ function initHeaderParticles(data) {
   const DB = 10; // dark mode blend buckets
   const darkBuckets = Array.from({ length: DB }, () => []);
   const spatialHash = new Map(); // reused each frame — cleared, not recreated
-  let dotWf = [], dotRf = []; // per-dot scratch: wake and ripple factors
+  let dotWf = [], dotRf = [], dotBr = []; // per-dot scratch: wake, ripple, breathe (dotsByDepth order)
+  let dotWake = [];  // per-dot wake factor in dots[] order (for connection brightening)
   const TURB_DECAY = 0.93;
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
@@ -734,12 +735,115 @@ function initHeaderParticles(data) {
   const EXPLODE_STR = 10;   // outward burst velocity on release
   const BEAT_INTERVAL = 2500; // ms between heartbeat ripples (30 bpm)
   const PULSE_WANDER_SPEED = 0.00025; // how fast the heartbeat origin drifts
+  const BREATHE_RADIUS = REPEL_RADIUS * 1.4; // zone around cursor where dots pulse
+  const BREATHE_AMP = 0.6;   // max radius scale boost (0.6 = +60% at peak)
+  const BREATHE_SPEED = 3.5;  // sine frequency (rad/s) for breathing cycle
+  // ── Idle constellation ──────────────────────────────────────
+  const CONSTELLATION = true;    // set to false to disable idle constellation
+  const CONSTEL_IDLE = 3000;     // ms before constellation forms
+  const CONSTEL_RAMP = 1500;     // ms to fully blend into constellation positions
+  const CONSTEL_RADIUS = 100;    // scale factor for constellation coordinates (px)
+  const CONSTEL_CAPTURE = CONSTEL_RADIUS * 3; // how far to recruit dots (from home position)
+  const CONSTEL_SPRING = 0.12;   // spring strength toward constellation slot
+  const CONSTEL_RECRUIT_INTERVAL = 150; // ms between each star activation
+  const CONSTEL_ROTATE_SPEED = 0.08;   // radians per second once fully formed
+  const CONSTEL_GRAVITY_R = CONSTEL_RADIUS * 1.8; // lensing pull radius
+  const CONSTEL_GRAVITY_STR = 0.1;    // fraction of spring strength for inward pull
+  // 13 real constellations — stars as [x,y] normalised to ~[-1,1], edges as index pairs
+  const CONSTELLATIONS = [
+    {
+      name: 'Orion',
+      stars: [[-0.35, -0.95], [0.35, -0.85], [-0.15, -0.15], [0.0, 0.0], [0.15, -0.15], [-0.3, 0.75], [0.35, 0.85]],
+      edges: [[0, 2], [1, 4], [2, 3], [3, 4], [2, 5], [4, 6]]
+    },
+    {
+      name: 'Big Dipper',
+      stars: [[0.9, 0.25], [0.55, 0.1], [0.25, 0.05], [-0.05, -0.3], [-0.35, -0.45], [-0.65, -0.6], [-0.9, -0.35]],
+      edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]]
+    },
+    {
+      name: 'Cassiopeia',
+      stars: [[-0.9, -0.35], [-0.4, 0.4], [0.0, -0.3], [0.4, 0.45], [0.9, -0.3]],
+      edges: [[0, 1], [1, 2], [2, 3], [3, 4]]
+    },
+    {
+      name: 'Leo',
+      stars: [[-0.2, -0.9], [-0.5, -0.65], [-0.6, -0.25], [-0.45, 0.1], [-0.15, 0.35], [0.1, 0.0], [0.45, 0.1], [0.8, 0.3]],
+      edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [0, 5], [5, 6], [6, 7]]
+    },
+    {
+      name: 'Scorpius',
+      stars: [[-0.7, -0.9], [-0.3, -0.5], [0.0, -0.15], [0.15, 0.15], [0.1, 0.4], [0.0, 0.6], [-0.2, 0.75], [-0.5, 0.85], [-0.7, 0.65]],
+      edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8]]
+    },
+    {
+      name: 'Cygnus',
+      stars: [[0.0, -0.9], [0.0, -0.2], [0.0, 0.6], [-0.6, 0.05], [0.6, 0.05]],
+      edges: [[0, 1], [1, 2], [3, 1], [1, 4]]
+    },
+    {
+      name: 'Gemini',
+      stars: [[-0.3, -0.9], [0.3, -0.85], [-0.25, -0.3], [0.25, -0.2], [-0.2, 0.25], [0.2, 0.35], [-0.15, 0.75], [0.15, 0.85]],
+      edges: [[0, 2], [2, 4], [4, 6], [1, 3], [3, 5], [5, 7], [0, 1]]
+    },
+    {
+      name: 'Lyra',
+      stars: [[0.0, -0.9], [-0.35, -0.05], [0.35, -0.05], [0.3, 0.55], [-0.3, 0.55]],
+      edges: [[0, 1], [0, 2], [1, 4], [2, 3], [3, 4]]
+    },
+    {
+      name: 'Aquila',
+      stars: [[-0.5, -0.45], [0.0, 0.0], [0.5, -0.35], [0.0, 0.7]],
+      edges: [[0, 1], [1, 2], [1, 3]]
+    },
+    {
+      name: 'Crux',
+      stars: [[0.0, -0.85], [0.0, 0.85], [-0.55, 0.0], [0.55, 0.0]],
+      edges: [[0, 1], [2, 3]]
+    },
+    {
+      name: 'Canis Major',
+      stars: [[0.0, -0.9], [-0.4, -0.25], [0.3, -0.15], [-0.3, 0.3], [0.4, 0.4], [-0.5, 0.8], [0.2, 0.9]],
+      edges: [[0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 6], [3, 4]]
+    },
+    {
+      name: 'Taurus',
+      stars: [[0.3, -0.05], [-0.1, -0.35], [-0.4, -0.55], [-0.7, -0.85], [0.5, -0.45], [0.0, 0.35], [-0.4, 0.25]],
+      edges: [[0, 1], [1, 2], [2, 3], [1, 4], [0, 5], [0, 6]]
+    },
+    {
+      name: 'Corona Borealis',
+      stars: [[-0.9, 0.15], [-0.6, -0.3], [-0.2, -0.5], [0.2, -0.5], [0.6, -0.3], [0.9, 0.15], [0.5, 0.45]],
+      edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]]
+    },
+  ];
+  // Shuffle constellation order on page load (Fisher-Yates)
+  for (let i = CONSTELLATIONS.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [CONSTELLATIONS[i], CONSTELLATIONS[j]] = [CONSTELLATIONS[j], CONSTELLATIONS[i]];
+  }
+
   let dots = [], dotsByDepth = [], mouse = { x: -9999, y: -9999 },
     prevMouse = { x: -9999, y: -9999 }, turbulence = 0, ripples = [], t = 0,
     scrollProgress = 0, tiltX = 0, tiltY = 0,
     canvasRect = { left: 0, top: 0 },
     attracting = false, longPressTimer = null,
     lastBeat = 0, pulseT = 0, frameCount = 0;
+
+  // Constellation state
+  let idleSince = 0, idleMx = -9999, idleMy = -9999;
+  let constelSlots = null; // [{tx, ty, dotIdx, activateAt, activated}] when active
+  let constelEdges = null; // [[i,j], ...] edge list for current constellation
+  let constelOrder = null; // activation order: array of star indices
+  let constelShapeIdx = 0;
+  let constelName = '';
+  let constelFont = '';
+  let constelWasActive = false; // tracks whether constellation was active last frame (for dissolve ripple)
+  let constelCx = 0, constelCy = 0; // center of constellation
+  let constelOffsets = null; // [{ox, oy}] relative offsets per star (for rotation)
+  let constelAllActive = false; // flag: all stars recruited (avoids .every() per frame)
+  const CONSTEL_GHOST_DURATION = 2500; // ms ghost glow persists after constellation dissolves
+  const constelMap = new Map(); // reused each frame
 
   // ── Pixel cat ────────────────────────────────────────────────
   // All sprites face right (head right, tail left).
@@ -939,7 +1043,7 @@ function initHeaderParticles(data) {
         const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
         const depth = Math.random();
         const phase = Math.random() * Math.PI * 2; // per-dot hue cycle offset
-        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase, lastDisplaced: 0, angle: 0 });
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase, lastDisplaced: 0, angle: 0, ghostUntil: 0 });
       }
     }
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
@@ -1495,6 +1599,135 @@ function initHeaderParticles(data) {
     // ── Scroll gravity offset ────────────────────────────────
     const gravityOffset = (scrollProgress - 0.5) * GRAVITY_STR;
 
+    // ── Idle constellation detection ────────────────────────
+    const cursorMoved = !CONSTELLATION || Math.abs(mouse.x - idleMx) > 2.5 || Math.abs(mouse.y - idleMy) > 2.5;
+    if (cursorMoved || mouse.x < -9000) {
+      // Dissolve ripple + ghost glow when breaking an active constellation
+      if (constelWasActive && mouse.x > -9000) {
+        ripples.push({ x: idleMx, y: idleMy, r: 0, str: RIPPLE_STR * 0.35 });
+        // Stamp ghost glow directly on constellation dot objects
+        if (constelSlots) {
+          for (const s of constelSlots) {
+            if (s.dotIdx >= 0 && s.activated) {
+              dots[s.dotIdx].ghostUntil = now + CONSTEL_GHOST_DURATION;
+            }
+          }
+        }
+      }
+      idleSince = now;
+      idleMx = mouse.x;
+      idleMy = mouse.y;
+      constelSlots = null;
+      constelEdges = null;
+      constelOrder = null;
+      constelOffsets = null;
+      constelAllActive = false;
+      constelWasActive = false;
+    }
+    const idleTime = now - idleSince;
+    let constelBlend = 0;
+    if (idleTime > CONSTEL_IDLE && mouse.x > -9000 && !attracting) {
+      constelBlend = Math.min(1, (idleTime - CONSTEL_IDLE) / CONSTEL_RAMP);
+      if (!constelSlots) {
+        // Pick next constellation
+        const c = CONSTELLATIONS[constelShapeIdx % CONSTELLATIONS.length];
+        constelShapeIdx++;
+        constelName = c.name;
+        constelEdges = c.edges;
+        // Random rotation
+        const baseAngle = Math.random() * Math.PI * 2;
+        const cosA = Math.cos(baseAngle), sinA = Math.sin(baseAngle);
+        const slots = c.stars.map(([sx, sy]) => ({
+          tx: mouse.x + (sx * cosA - sy * sinA) * CONSTEL_RADIUS,
+          ty: mouse.y + (sx * sinA + sy * cosA) * CONSTEL_RADIUS,
+          dotIdx: -1, activated: false, activatedAt: 0
+        }));
+        // Assign nearest dots to each slot (by home position)
+        const taken = new Set();
+        for (const slot of slots) {
+          let bestDist = Infinity, bestIdx = -1;
+          for (let i = 0; i < dots.length; i++) {
+            if (taken.has(i)) continue;
+            const dd = Math.hypot(dots[i].hx - slot.tx, dots[i].hy - slot.ty);
+            if (dd < CONSTEL_CAPTURE && dd < bestDist) {
+              bestDist = dd;
+              bestIdx = i;
+            }
+          }
+          if (bestIdx >= 0) {
+            slot.dotIdx = bestIdx;
+            taken.add(bestIdx);
+          }
+        }
+        // Build activation order by tracing edges: start at edge[0][0], follow connections
+        const visited = new Set();
+        const order = [];
+        // Seed with first vertex of first edge
+        if (c.edges.length > 0) {
+          const queue = [c.edges[0][0]];
+          visited.add(queue[0]);
+          while (queue.length > 0) {
+            const v = queue.shift();
+            order.push(v);
+            for (const [a, b] of c.edges) {
+              const next = a === v ? b : b === v ? a : -1;
+              if (next >= 0 && !visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+              }
+            }
+          }
+        }
+        // Add any unvisited stars (disconnected vertices)
+        for (let i = 0; i < slots.length; i++) {
+          if (!visited.has(i)) order.push(i);
+        }
+        constelOrder = order;
+        constelSlots = slots;
+        constelCx = mouse.x;
+        constelCy = mouse.y;
+        constelOffsets = slots.map(s => ({ ox: s.tx - mouse.x, oy: s.ty - mouse.y }));
+      }
+
+      // Progressive recruitment — activate stars one by one
+      if (constelSlots && constelOrder) {
+        const elapsed = idleTime - CONSTEL_IDLE;
+        for (let k = 0; k < constelOrder.length; k++) {
+          const slot = constelSlots[constelOrder[k]];
+          const activateAt = k * CONSTEL_RECRUIT_INTERVAL;
+          if (elapsed >= activateAt && !slot.activated && slot.dotIdx >= 0) {
+            slot.activated = true;
+            slot.activatedAt = now;
+            // Micro-ripple at the star's target position
+            ripples.push({ x: slot.tx, y: slot.ty, r: 0, str: RIPPLE_STR * 0.05 });
+            // Check if all assignable stars are now active
+            if (!constelAllActive) {
+              constelAllActive = constelSlots.every(s => s.activated || s.dotIdx < 0);
+            }
+          }
+        }
+        constelWasActive = true;
+
+        // Slow rotation once all stars are activated
+        if (constelAllActive && constelOffsets) {
+          const angle = (now - (idleSince + CONSTEL_IDLE + constelOrder.length * CONSTEL_RECRUIT_INTERVAL)) * 0.001 * CONSTEL_ROTATE_SPEED;
+          const cosR = Math.cos(angle), sinR = Math.sin(angle);
+          for (let k = 0; k < constelSlots.length; k++) {
+            const o = constelOffsets[k];
+            constelSlots[k].tx = constelCx + o.ox * cosR - o.oy * sinR;
+            constelSlots[k].ty = constelCy + o.ox * sinR + o.oy * cosR;
+          }
+        }
+      }
+    }
+    // Build map of activated constellation dots only
+    constelMap.clear();
+    if (constelSlots && constelBlend > 0) {
+      for (const s of constelSlots) {
+        if (s.dotIdx >= 0 && s.activated) constelMap.set(s.dotIdx, s);
+      }
+    }
+
     // ── Physics ──────────────────────────────────────────────
     // Hoist tilt constants — same for every dot, only depth varies
     const tiltBaseX = Math.max(-1, Math.min(1, tiltX / 25)) * TILT_AMP;
@@ -1503,8 +1736,11 @@ function initHeaderParticles(data) {
     frameCount++;
     for (let i = 0; i < dots.length; i++) {
       const d = dots[i];
-      // Cursor interaction — skip entirely when cursor is off-canvas
-      if (cursorActive) {
+      const constelSlot = constelBlend > 0 ? constelMap.get(i) : undefined;
+      const inConstellation = constelSlot !== undefined;
+      // Cursor interaction — skip for constellation dots and when cursor is off-canvas
+      // During active constellation, suppress repulsion within lensing radius
+      if (cursorActive && !inConstellation) {
         const mx = d.x - mouse.x, my = d.y - mouse.y;
         const mdist = Math.hypot(mx, my);
         if (attracting) {
@@ -1516,10 +1752,16 @@ function initHeaderParticles(data) {
           }
         } else {
           if (mdist < REPEL_RADIUS && mdist > 0) {
-            const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
+            // Fade out repulsion inside constellation gravity zone
+            let repelScale = 1;
+            if (constelWasActive && constelBlend > 0) {
+              const gd = Math.sqrt((d.x - constelCx) * (d.x - constelCx) + (d.y - constelCy) * (d.y - constelCy));
+              if (gd < CONSTEL_GRAVITY_R) repelScale = Math.max(0, 1 - (1 - gd / CONSTEL_GRAVITY_R) * constelBlend);
+            }
+            const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence) * repelScale;
             d.vx += (mx / mdist) * f * REPEL_STR;
             d.vy += (my / mdist) * f * REPEL_STR;
-            d.lastDisplaced = now;
+            if (f > 0.01) d.lastDisplaced = now;
           }
         }
       }
@@ -1539,14 +1781,43 @@ function initHeaderParticles(data) {
       // Spring toward noise-drifted home target, shifted by gravity + tilt parallax
       // Recompute angle every 4 frames, staggered by index — cuts noise() cost ~4×
       if ((frameCount + i) % 4 === 0) d.angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
-      const tx = d.hx + Math.cos(d.angle) * DRIFT_AMP + tiltBaseX * d.depth;
-      const ty = d.hy + Math.sin(d.angle) * DRIFT_AMP + gravityOffset + tiltBaseY * d.depth;
-      d.vx += (tx - d.x) * SPRING;
-      d.vy += (ty - d.y) * SPRING;
-      // Deeper dots are more sluggish
-      const damp = DAMPING + 0.12 * (1 - d.depth);
+      let tx = d.hx + Math.cos(d.angle) * DRIFT_AMP + tiltBaseX * d.depth;
+      let ty = d.hy + Math.sin(d.angle) * DRIFT_AMP + gravityOffset + tiltBaseY * d.depth;
+
+      // Constellation: blend spring target toward assigned slot position
+      if (inConstellation && constelBlend > 0) {
+        tx = tx + (constelSlot.tx - tx) * constelBlend;
+        ty = ty + (constelSlot.ty - ty) * constelBlend;
+        d.lastDisplaced = now; // keep wake glow active during constellation
+      } else if (constelBlend > 0 && constelWasActive) {
+        // Gravitational lensing — gently pull nearby dots toward constellation center
+        const gx = d.x - constelCx, gy = d.y - constelCy;
+        const gd = Math.sqrt(gx * gx + gy * gy);
+        if (gd < CONSTEL_GRAVITY_R && gd > 0) {
+          const pull = (1 - gd / CONSTEL_GRAVITY_R) * constelBlend * CONSTEL_GRAVITY_STR;
+          tx += (constelCx - d.x) * pull;
+          ty += (constelCy - d.y) * pull;
+        }
+      }
+
+      d.vx += (tx - d.x) * (inConstellation ? CONSTEL_SPRING + SPRING * constelBlend : SPRING);
+      d.vy += (ty - d.y) * (inConstellation ? CONSTEL_SPRING + SPRING * constelBlend : SPRING);
+      // Deeper dots are more sluggish — constellation dots get extra damping for smooth settle
+      const damp = inConstellation ? 0.72 : DAMPING + 0.12 * (1 - d.depth);
       d.vx *= damp;
       d.vy *= damp;
+    }
+
+    // ── Per-dot wake factor (dots[] order) for connection brightening ──
+    if (dotWake.length < dots.length) dotWake = new Float32Array(dots.length);
+    for (let i = 0; i < dots.length; i++) {
+      let wk = Math.max(0, 1 - (now - dots[i].lastDisplaced) / WAKE_DURATION);
+      // Ghost glow from dissolved constellation — longer, fainter
+      if (dots[i].ghostUntil > now) {
+        const gf = (dots[i].ghostUntil - now) / CONSTEL_GHOST_DURATION;
+        wk = Math.max(wk, gf * 0.4);
+      }
+      dotWake[i] = wk;
     }
 
     // ── Build spatial hash (cell = CONNECT_RADIUS, covers both radii) ──
@@ -1587,7 +1858,10 @@ function initHeaderParticles(data) {
               const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
               if (depthSim < 0.15) continue;
               const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
-              const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
+              // Boost connection visibility when either endpoint was recently displaced
+              const wakeBoost = Math.max(dotWake[i], dotWake[j]);
+              const raw = distFactor * depthSim + wakeBoost * 0.2;
+              const bi = Math.min(BUCKETS - 1, Math.floor(raw * BUCKETS));
               buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
             }
           }
@@ -1625,12 +1899,16 @@ function initHeaderParticles(data) {
     // ── Draw dots (back-to-front, depth-scaled size + opacity) ──
     const isDark = document.documentElement.dataset.theme === 'dark';
 
-    // ── Precompute per-dot wake + ripple factors (used by both modes) ──
+    // ── Precompute per-dot wake + ripple + breathe factors (used by both modes) ──
     const n = dotsByDepth.length;
-    if (dotWf.length < n) { dotWf = new Float32Array(n); dotRf = new Float32Array(n); }
+    if (dotWf.length < n) { dotWf = new Float32Array(n); dotRf = new Float32Array(n); dotBr = new Float32Array(n); }
+    const breathePhase = now * 0.001 * BREATHE_SPEED;
+    const BR2 = BREATHE_RADIUS * BREATHE_RADIUS;
     for (let i = 0; i < n; i++) {
       const d = dotsByDepth[i];
-      dotWf[i] = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+      let wf = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+      if (d.ghostUntil > now) wf = Math.max(wf, ((d.ghostUntil - now) / CONSTEL_GHOST_DURATION) * 0.4);
+      dotWf[i] = wf;
       let rf = 0;
       for (const rip of ripples) {
         const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
@@ -1641,6 +1919,16 @@ function initHeaderParticles(data) {
         }
       }
       dotRf[i] = rf;
+      // Proximity breathing — precompute radius multiplier
+      if (cursorActive) {
+        const bdx = d.x - mouse.x, bdy = d.y - mouse.y;
+        const bd2 = bdx * bdx + bdy * bdy;
+        if (bd2 < BR2) {
+          const proximity = 1 - Math.sqrt(bd2) / BREATHE_RADIUS;
+          const pulse = (Math.sin(breathePhase + d.phase) + 1) * 0.5;
+          dotBr[i] = 1 + proximity * pulse * BREATHE_AMP;
+        } else { dotBr[i] = 1; }
+      } else { dotBr[i] = 1; }
     }
 
     if (isDark) {
@@ -1666,7 +1954,7 @@ function initHeaderParticles(data) {
         ctx.beginPath();
         for (const i of bucket) {
           const d = dotsByDepth[i];
-          const radius = DOT_R * (0.4 + 0.9 * d.depth);
+          const radius = DOT_R * (0.4 + 0.9 * d.depth) * dotBr[i];
           ctx.moveTo(d.x + radius, d.y);
           ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
         }
@@ -1681,10 +1969,11 @@ function initHeaderParticles(data) {
         const alphaMid = (alphaMin + alphaMax) / 2;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${alphaMid.toFixed(2)})`;
         ctx.beginPath();
-        for (const d of dotsByDepth) {
+        for (let i = 0; i < n; i++) {
+          const d = dotsByDepth[i];
           const alpha = 0.2 + 0.6 * d.depth;
           if (alpha >= alphaMin && alpha < alphaMax) {
-            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            const radius = DOT_R * (0.4 + 0.9 * d.depth) * dotBr[i];
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
           }
@@ -1702,7 +1991,7 @@ function initHeaderParticles(data) {
           const wf = dotWf[i];
           if (wf >= wMin && wf < wMax) {
             const d = dotsByDepth[i];
-            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            const radius = DOT_R * (0.4 + 0.9 * d.depth) * dotBr[i];
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
           }
@@ -1720,12 +2009,68 @@ function initHeaderParticles(data) {
           const rf = dotRf[i];
           if (rf >= rMin && rf < rMax) {
             const d = dotsByDepth[i];
-            const radius = DOT_R * (0.4 + 0.9 * d.depth);
+            const radius = DOT_R * (0.4 + 0.9 * d.depth) * dotBr[i];
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
           }
         }
         ctx.fill();
+      }
+    }
+
+    // ── Draw constellation (edge lines + star dots + name label) ──
+    if (constelSlots && constelEdges && constelBlend > 0) {
+      const alpha = constelBlend * 0.45;
+      // Draw edges — grow from earlier-activated endpoint to later one over 200ms
+      const EDGE_GROW_MS = 200;
+      ctx.strokeStyle = isDark
+        ? `rgba(100,180,255,${alpha.toFixed(2)})`
+        : `rgba(${cr},${cg},${cb},${alpha.toFixed(2)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (const [a, b] of constelEdges) {
+        const sa = constelSlots[a], sb = constelSlots[b];
+        if (sa.dotIdx < 0 || sb.dotIdx < 0) continue;
+        // Edge starts drawing when the later star activates
+        if (!sa.activated || !sb.activated) continue;
+        const da = dots[sa.dotIdx], db = dots[sb.dotIdx];
+        // The endpoint that activated later drives the growth
+        const laterTime = Math.max(sa.activatedAt, sb.activatedAt);
+        const growT = Math.min(1, (now - laterTime) / EDGE_GROW_MS);
+        // Draw from earlier endpoint toward later endpoint
+        const fromFirst = sa.activatedAt <= sb.activatedAt;
+        const fx = fromFirst ? da.x : db.x, fy = fromFirst ? da.y : db.y;
+        const tx = fromFirst ? db.x : da.x, ty = fromFirst ? db.y : da.y;
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + (tx - fx) * growT, fy + (ty - fy) * growT);
+      }
+      ctx.stroke();
+
+      // Enlarged bright dots at activated star positions
+      const dotAlpha = constelBlend * 0.75;
+      ctx.fillStyle = isDark
+        ? `rgba(140,200,255,${dotAlpha.toFixed(2)})`
+        : `rgba(${cr},${cg},${cb},${dotAlpha.toFixed(2)})`;
+      ctx.beginPath();
+      for (const s of constelSlots) {
+        if (!s.activated || s.dotIdx < 0) continue;
+        const d = dots[s.dotIdx];
+        const r = DOT_R * 1.5;
+        ctx.moveTo(d.x + r, d.y);
+        ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+
+      // Constellation name label — only after all stars are activated
+      if (constelAllActive && constelBlend > 0.5) {
+        const labelAlpha = (constelBlend - 0.5) * 0.6;
+        if (!constelFont) constelFont = `500 10px ${getComputedStyle(document.body).fontFamily}`;
+        ctx.font = constelFont;
+        ctx.fillStyle = isDark
+          ? `rgba(100,180,255,${labelAlpha.toFixed(2)})`
+          : `rgba(${cr},${cg},${cb},${labelAlpha.toFixed(2)})`;
+        ctx.textAlign = 'center';
+        ctx.fillText(constelName, mouse.x, mouse.y + CONSTEL_RADIUS + 16);
       }
     }
 
