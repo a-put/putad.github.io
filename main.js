@@ -144,7 +144,10 @@ function renderHeader(data) {
 // ── About ──────────────────────────────────────────────────────
 function renderAbout(data) {
   renderExplainer(data);
-  document.getElementById('about-text').textContent = data.about;
+  document.getElementById('about-text').innerHTML = data.about
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '<br><br>');
   renderEducation(data.education);
 }
 
@@ -666,7 +669,10 @@ function initHeaderParticles(data) {
 
   const BUCKETS = 5;
   const buckets = Array.from({ length: BUCKETS }, () => []);
+  const DB = 10; // dark mode blend buckets
+  const darkBuckets = Array.from({ length: DB }, () => []);
   const spatialHash = new Map(); // reused each frame — cleared, not recreated
+  let dotWf = [], dotRf = []; // per-dot scratch: wake and ripple factors
   const TURB_DECAY = 0.93;
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
@@ -683,7 +689,7 @@ function initHeaderParticles(data) {
     scrollProgress = 0, tiltX = 0, tiltY = 0,
     canvasRect = { left: 0, top: 0 },
     attracting = false, longPressTimer = null,
-    lastBeat = 0, pulseT = 0;
+    lastBeat = 0, pulseT = 0, frameCount = 0;
 
   // ── Pixel cat ────────────────────────────────────────────────
   // All sprites face right (head right, tail left).
@@ -883,7 +889,7 @@ function initHeaderParticles(data) {
         const hy = -my + (r + 0.2 + Math.random() * 0.6) * ch;
         const depth = Math.random();
         const phase = Math.random() * Math.PI * 2; // per-dot hue cycle offset
-        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase, lastDisplaced: 0 });
+        dots.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, depth, phase, lastDisplaced: 0, angle: 0 });
       }
     }
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
@@ -1408,6 +1414,7 @@ function initHeaderParticles(data) {
   }
 
   function tick() {
+    if (document.hidden) return;
     t = (t + DRIFT_SPEED) % (Math.PI * 2000);
     pulseT += PULSE_WANDER_SPEED;
     const now = performance.now();
@@ -1439,23 +1446,31 @@ function initHeaderParticles(data) {
     const gravityOffset = (scrollProgress - 0.5) * GRAVITY_STR;
 
     // ── Physics ──────────────────────────────────────────────
-    for (const d of dots) {
-      // Cursor interaction — repulsion normally, attraction when gravity-well active
-      const mx = d.x - mouse.x, my = d.y - mouse.y;
-      const mdist = Math.hypot(mx, my);
-      if (attracting) {
-        if (mdist < ATTRACT_R && mdist > 0) {
-          const f = (1 - mdist / ATTRACT_R) * (0.3 + 0.7 * d.depth);
-          d.vx -= (mx / mdist) * f * ATTRACT_STR; // negative = toward cursor
-          d.vy -= (my / mdist) * f * ATTRACT_STR;
-          d.lastDisplaced = now;
-        }
-      } else {
-        if (mdist < REPEL_RADIUS && mdist > 0) {
-          const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
-          d.vx += (mx / mdist) * f * REPEL_STR;
-          d.vy += (my / mdist) * f * REPEL_STR;
-          d.lastDisplaced = now;
+    // Hoist tilt constants — same for every dot, only depth varies
+    const tiltBaseX = Math.max(-1, Math.min(1, tiltX / 25)) * TILT_AMP;
+    const tiltBaseY = Math.max(-1, Math.min(1, tiltY / 25)) * TILT_AMP;
+    const cursorActive = mouse.x > -9000;
+    frameCount++;
+    for (let i = 0; i < dots.length; i++) {
+      const d = dots[i];
+      // Cursor interaction — skip entirely when cursor is off-canvas
+      if (cursorActive) {
+        const mx = d.x - mouse.x, my = d.y - mouse.y;
+        const mdist = Math.hypot(mx, my);
+        if (attracting) {
+          if (mdist < ATTRACT_R && mdist > 0) {
+            const f = (1 - mdist / ATTRACT_R) * (0.3 + 0.7 * d.depth);
+            d.vx -= (mx / mdist) * f * ATTRACT_STR;
+            d.vy -= (my / mdist) * f * ATTRACT_STR;
+            d.lastDisplaced = now;
+          }
+        } else {
+          if (mdist < REPEL_RADIUS && mdist > 0) {
+            const f = (1 - mdist / REPEL_RADIUS) * (0.3 + 0.7 * d.depth) * (1 + turbulence);
+            d.vx += (mx / mdist) * f * REPEL_STR;
+            d.vy += (my / mdist) * f * REPEL_STR;
+            d.lastDisplaced = now;
+          }
         }
       }
 
@@ -1472,11 +1487,10 @@ function initHeaderParticles(data) {
       }
 
       // Spring toward noise-drifted home target, shifted by gravity + tilt parallax
-      const angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
-      const tiltScale = Math.max(-1, Math.min(1, tiltX / 25)) * TILT_AMP * d.depth;
-      const tiltScaleY = Math.max(-1, Math.min(1, tiltY / 25)) * TILT_AMP * d.depth;
-      const tx = d.hx + Math.cos(angle) * DRIFT_AMP + tiltScale;
-      const ty = d.hy + Math.sin(angle) * DRIFT_AMP + gravityOffset + tiltScaleY;
+      // Recompute angle every 4 frames, staggered by index — cuts noise() cost ~4×
+      if ((frameCount + i) % 4 === 0) d.angle = noise(d.hx * 0.012 + t, d.hy * 0.012) * Math.PI * 2;
+      const tx = d.hx + Math.cos(d.angle) * DRIFT_AMP + tiltBaseX * d.depth;
+      const ty = d.hy + Math.sin(d.angle) * DRIFT_AMP + gravityOffset + tiltBaseY * d.depth;
       d.vx += (tx - d.x) * SPRING;
       d.vy += (ty - d.y) * SPRING;
       // Deeper dots are more sluggish
@@ -1496,7 +1510,9 @@ function initHeaderParticles(data) {
       cell.push(i);
     }
 
-    // ── Dot–dot soft repulsion (before position integration) ──
+    // ── Combined pass: dot–dot repulsion + connection bucket assignment ──
+    // Single 3×3 neighborhood query handles both — halves hash lookups per frame.
+    for (let i = 0; i < BUCKETS; i++) buckets[i].length = 0;
     for (let i = 0; i < dots.length; i++) {
       const cx = Math.floor(dots[i].x / CONNECT_RADIUS);
       const cy = Math.floor(dots[i].y / CONNECT_RADIUS);
@@ -1517,6 +1533,13 @@ function initHeaderParticles(data) {
               dots[i].vx += fx; dots[i].vy += fy;
               dots[j].vx -= fx; dots[j].vy -= fy;
             }
+            if (d2 < CR2) {
+              const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
+              if (depthSim < 0.15) continue;
+              const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
+              const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
+              buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
+            }
           }
         }
       }
@@ -1528,35 +1551,10 @@ function initHeaderParticles(data) {
       d.y += d.vy;
     }
 
-    // Advance and cull ripples
-    for (const rip of ripples) rip.r += 3.5;
-    ripples = ripples.filter(rip => rip.r < RIPPLE_MAX_R);
-
-    // ── Draw connections (batched into alpha buckets) ─────────
-    for (let i = 0; i < BUCKETS; i++) buckets[i].length = 0;
-
-    for (let i = 0; i < dots.length; i++) {
-      const cx = Math.floor(dots[i].x / CONNECT_RADIUS);
-      const cy = Math.floor(dots[i].y / CONNECT_RADIUS);
-      for (let nx = cx - 1; nx <= cx + 1; nx++) {
-        for (let ny = cy - 1; ny <= cy + 1; ny++) {
-          const cell = spatialHash.get(nx * 1000 + ny);
-          if (!cell) continue;
-          for (const j of cell) {
-            if (j <= i) continue;
-            const dx = dots[i].x - dots[j].x;
-            const dy = dots[i].y - dots[j].y;
-            const d2 = dx * dx + dy * dy;
-            if (d2 < CR2) {
-              const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
-              if (depthSim < 0.15) continue;
-              const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
-              const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
-              buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
-            }
-          }
-        }
-      }
+    // Advance and cull ripples (in-place to avoid per-frame array allocation)
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      ripples[i].r += 3.5;
+      if (ripples[i].r >= RIPPLE_MAX_R) ripples.splice(i, 1);
     }
 
     ctx.lineWidth = 1;
@@ -1576,35 +1574,56 @@ function initHeaderParticles(data) {
 
     // ── Draw dots (back-to-front, depth-scaled size + opacity) ──
     const isDark = document.documentElement.dataset.theme === 'dark';
+
+    // ── Precompute per-dot wake + ripple factors (used by both modes) ──
+    const n = dotsByDepth.length;
+    if (dotWf.length < n) { dotWf = new Float32Array(n); dotRf = new Float32Array(n); }
+    for (let i = 0; i < n; i++) {
+      const d = dotsByDepth[i];
+      dotWf[i] = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+      let rf = 0;
+      for (const rip of ripples) {
+        const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
+        const ring = Math.abs(rdist - rip.r);
+        if (ring < 60) {
+          const v = (1 - ring / 60) * (1 - rip.r / RIPPLE_MAX_R);
+          if (v > rf) rf = v;
+        }
+      }
+      dotRf[i] = rf;
+    }
+
     if (isDark) {
-      // Dark mode: bioluminescence — each dot has individual colour, draw one by one
-      for (const d of dotsByDepth) {
-        const radius = DOT_R * (0.4 + 0.9 * d.depth);
+      // Dark mode: bioluminescence — bucket by blend to minimise fillStyle + fill calls
+      for (let i = 0; i < DB; i++) darkBuckets[i].length = 0;
+      for (let i = 0; i < n; i++) {
+        const d = dotsByDepth[i];
         const disp = Math.hypot(d.x - d.hx, d.y - d.hy);
         const dispFactor = Math.min(1, disp / 25);
         const cycleFactor = (Math.sin(t * 30 + d.phase) + 1) / 2 * 0.65;
-        let rippleFactor = 0;
-        for (const rip of ripples) {
-          const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
-          const ring = Math.abs(rdist - rip.r);
-          if (ring < 60) {
-            const rf = (1 - ring / 60) * (1 - rip.r / RIPPLE_MAX_R);
-            if (rf > rippleFactor) rippleFactor = rf;
-          }
-        }
-        const wakeFactor = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
-        const blend = Math.max(cycleFactor, dispFactor, rippleFactor, wakeFactor);
-        const dr = Math.round(90 + 120 * blend);
-        const dg = Math.round(110 + 110 * blend);
-        const db = Math.round(210 + 45 * blend);
-        const alpha = Math.min(1, (0.2 + 0.6 * d.depth) + dispFactor * 0.6 + rippleFactor * 0.7 + wakeFactor * 0.6);
+        const blend = Math.max(cycleFactor, dispFactor, dotRf[i], dotWf[i]);
+        darkBuckets[Math.min(DB - 1, Math.floor(blend * DB))].push(i);
+      }
+      for (let bi = 0; bi < DB; bi++) {
+        const bucket = darkBuckets[bi];
+        if (!bucket.length) continue;
+        const blendMid = (bi + 0.5) / DB;
+        const dr = Math.round(90 + 120 * blendMid);
+        const dg = Math.round(110 + 110 * blendMid);
+        const db = Math.round(210 + 45 * blendMid);
+        const alpha = Math.min(0.99, 0.5 + 0.7 * blendMid);
         ctx.fillStyle = `rgba(${dr},${dg},${db},${alpha.toFixed(2)})`;
         ctx.beginPath();
-        ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+        for (const i of bucket) {
+          const d = dotsByDepth[i];
+          const radius = DOT_R * (0.4 + 0.9 * d.depth);
+          ctx.moveTo(d.x + radius, d.y);
+          ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
+        }
         ctx.fill();
       }
     } else {
-      // Light mode: all dots same colour — batch by alpha bucket to minimise fillStyle changes
+      // Light mode: all dots same colour — batch by alpha bucket
       const DBUCKETS = 8;
       for (let bi = 0; bi < DBUCKETS; bi++) {
         const alphaMin = bi / DBUCKETS;
@@ -1622,16 +1641,17 @@ function initHeaderParticles(data) {
         }
         ctx.fill();
       }
-      // Wake glow pass — batch hot dots into 4 alpha buckets
+      // Wake glow pass — precomputed dotWf[], batched into buckets
       const WBUCKETS = 4;
       for (let wi = 0; wi < WBUCKETS; wi++) {
         const wMin = wi / WBUCKETS, wMax = (wi + 1) / WBUCKETS;
-        const wMid = ((wMin + wMax) / 2 * 0.45);
+        const wMid = (wMin + wMax) / 2 * 0.45;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${wMid.toFixed(2)})`;
         ctx.beginPath();
-        for (const d of dotsByDepth) {
-          const wf = Math.max(0, 1 - (now - d.lastDisplaced) / WAKE_DURATION);
+        for (let i = 0; i < n; i++) {
+          const wf = dotWf[i];
           if (wf >= wMin && wf < wMax) {
+            const d = dotsByDepth[i];
             const radius = DOT_R * (0.4 + 0.9 * d.depth);
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
@@ -1639,24 +1659,17 @@ function initHeaderParticles(data) {
         }
         ctx.fill();
       }
-      // Ripple glow pass — dots briefly brighten as a ripple ring sweeps through
+      // Ripple glow pass — precomputed dotRf[], batched into buckets
       const RBUCKETS = 4;
       for (let ri = 0; ri < RBUCKETS; ri++) {
         const rMin = ri / RBUCKETS, rMax = (ri + 1) / RBUCKETS;
         const rMid = (rMin + rMax) / 2 * 0.5;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${rMid.toFixed(2)})`;
         ctx.beginPath();
-        for (const d of dotsByDepth) {
-          let rf = 0;
-          for (const rip of ripples) {
-            const rdist = Math.hypot(d.x - rip.x, d.y - rip.y);
-            const ring = Math.abs(rdist - rip.r);
-            if (ring < 60) {
-              const v = (1 - ring / 60) * (1 - rip.r / RIPPLE_MAX_R);
-              if (v > rf) rf = v;
-            }
-          }
+        for (let i = 0; i < n; i++) {
+          const rf = dotRf[i];
           if (rf >= rMin && rf < rMax) {
+            const d = dotsByDepth[i];
             const radius = DOT_R * (0.4 + 0.9 * d.depth);
             ctx.moveTo(d.x + radius, d.y);
             ctx.arc(d.x, d.y, radius, 0, Math.PI * 2);
@@ -1770,6 +1783,9 @@ function initHeaderParticles(data) {
     spawnRipple(e.clientX, e.clientY);
   });
   window.addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) requestAnimationFrame(tick);
+  });
 
   // Initial setup — run immediately, not debounced
   const dpr0 = window.devicePixelRatio || 1;
