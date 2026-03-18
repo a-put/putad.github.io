@@ -703,7 +703,7 @@ function initHeaderParticles(data) {
     const isDark = document.documentElement.dataset.theme === 'dark';
     if (hasBg) return [255, 255, 255];
     if (isDark) return [174, 174, 178];
-    return [110, 110, 115];
+    return [90, 110, 135];
   }
 
   function buildDots() {
