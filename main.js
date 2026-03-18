@@ -658,11 +658,15 @@ function initHeaderParticles(data) {
   const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
   const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
   const HEARTBEAT = false; // set to false to disable the wandering heartbeat ripple
+  const CAT = false;  // set to false to disable the wandering pixel cat
+  const JELLYFISH = false;  // set to false to disable the floating pixel jellyfish
+  const JF_SCALE = 3;     // pixel size for jellyfish
   const CR2 = CONNECT_RADIUS * CONNECT_RADIUS;
   const DR2 = DOT_REPEL_R * DOT_REPEL_R;
 
   const BUCKETS = 5;
   const buckets = Array.from({ length: BUCKETS }, () => []);
+  const spatialHash = new Map(); // reused each frame — cleared, not recreated
   const TURB_DECAY = 0.93;
   const TURB_SCALE = 0.04;
   const TURB_MAX = 3.0;
@@ -680,6 +684,163 @@ function initHeaderParticles(data) {
     canvasRect = { left: 0, top: 0 },
     attracting = false, longPressTimer = null,
     lastBeat = 0, pulseT = 0;
+
+  // ── Pixel cat ────────────────────────────────────────────────
+  // All sprites face right (head right, tail left).
+  // drawCat mirrors rows horizontally when cat faces left.
+  const CAT_SCALE = 4;
+
+  // Shared body rows 0–9; walk frames append 2 leg rows (total 12 rows)
+  // Pixel key: # = body  h = highlight  s = shadow  e = eye  t = tail (animated)
+  // All sprites: 18 cols wide × 12 rows tall.  Cat faces right (head right, tail left).
+  const _CB = [
+    "..............#h..",   // r0:  ear tip (outer #, inner h)
+    "...........#######",   // r1:  ear base + head sweep
+    "...........#######",   // r2:  head crown
+    "...........##e####",   // r3:  face — eye at col 13
+    "...........#######",   // r4:  muzzle
+    ".........#########",   // r5:  neck → body widens
+    "ttt.##############",   // r6:  tail + body
+    "ttt.#############s",   // r7:  tail + body + shadow
+    "ttt.############ss",   // r8:  tail + belly shadow
+    ".tt.###########s..",   // r9:  tail tip + lower body
+  ];
+  const CAT_SPRITES = {
+    walk_1: [..._CB, "...#####.....#####", "....###.......####"],  // stride A
+    walk_2: [..._CB, ".....###.....####.", ".....###.....####."],  // mid-stride
+    walk_3: [..._CB, ".....######...####", ".....#####....###."],  // stride B
+    walk_4: [..._CB, ".....###.....####.", ".....###.....####."],  // mid-stride
+    sit: [
+      "..............#h..",   // r0:  ear tip
+      "...........#######",   // r1:  ear base
+      "...........#######",   // r2:  head crown
+      "...........##e####",   // r3:  face, eye open
+      "...........#######",   // r4:  muzzle
+      ".........#########",   // r5:  neck
+      "..........########",   // r6:  upper sitting body (no tail yet)
+      "..........########",   // r7:  body
+      "tt......##########",   // r8:  tail wraps in front + lower body
+      "ttt.....##########",   // r9:  tail + base
+      ".....#############",   // r10: paws
+      ".....#############",   // r11: paw row
+    ],
+    sit_blink: [
+      "..............#h..",
+      "...........#######",
+      "...........#######",
+      "...........#######",   // r3:  eye closed (e → #)
+      "...........#######",
+      ".........#########",
+      "..........########",
+      "..........########",
+      "tt......##########",
+      "ttt.....##########",
+      ".....#############",
+      ".....#############",
+    ],
+    sleep: [
+      "..................",   // r0:  empty
+      "....########......",   // r1:  top of curled body
+      "...##hhhhhh##.....",   // r2:  highlight arc along back
+      "..##############..",   // r3:  full body width
+      "..#########sss....",   // r4:  body + underside shadow
+      "...#########sss...",   // r5:  narrowing + shadow
+      "....########ss....",   // r6:  lower body + belly shadow
+      ".....#######s.....",   // r7:  tail curl
+      "......#####.......",   // r8:  tightest curl
+      "..................",   // r9:  empty
+      "..................",   // r10: empty
+      "..................",   // r11: empty
+    ],
+    peek: [
+      "..................",   // r0:  empty — head low and forward
+      "..............##h.",   // r1:  crown/ear just peeking
+      "..............####",   // r2:  head bulk at right edge
+      ".............##e##",   // r3:  face with eye
+      ".............#####",   // r4:  muzzle
+      "tttt.#############",   // r5:  tail + crouched body
+      "tttt.#############",   // r6:  tail + body
+      "tttt.############s",   // r7:  tail + shadow
+      ".ttt.###########ss",   // r8:  tail + belly shadow
+      ".....#############",   // r9:  lower body
+      ".....#############",   // r10: paws
+      ".....#############",   // r11: paws flat
+    ],
+    groom: [
+      "..............#h..",   // r0:  ear
+      "...........#######",   // r1:  ear base
+      "...........#######",   // r2:  head
+      "...........##e####",   // r3:  face with eye
+      "..........####h###",   // r4:  muzzle + raised paw highlight
+      ".........#########",   // r5:  neck + paw
+      "..........########",   // r6:  body
+      "..........########",   // r7:  body
+      "tt......##########",   // r8:  tail + body
+      "ttt.....##########",   // r9:  tail + lower body
+      ".....#############",   // r10: paws
+      ".....#############",   // r11: paws
+    ],
+    stretch: [
+      "..............#h..",   // r0:  ear
+      "..............####",   // r1:  head forward and low
+      ".......hhhhhhhhhh.",   // r2:  highlight on arched back
+      "......####hhhhhhhh",   // r3:  body arch with highlight
+      ".....#############",   // r4:  body slopes forward
+      "....##############",   // r5:  full stretch
+      "...#############..",   // r6:  narrowing toward front
+      "...##########.....",   // r7:  more narrowing
+      "...######....####.",   // r8:  front paws + back paws
+      "...#####......###.",   // r9:  paw tips
+      "..................",   // r10: empty
+      "..................",   // r11: empty
+    ],
+    yawn: [
+      "..............#h..",   // r0:  ear
+      "...........#######",   // r1:  ear base
+      "...........#######",   // r2:  head
+      "...........##e..##",   // r3:  face: eye + open-mouth gap (2 dots)
+      "...........#######",   // r4:  lower face / chin
+      ".........#########",   // r5:  neck
+      "..........########",   // r6:  body
+      "..........########",   // r7:  body
+      "tt......##########",   // r8:  tail + body
+      "ttt.....##########",   // r9:  tail + lower body
+      ".....#############",   // r10: paws
+      ".....#############",   // r11: paws
+    ],
+  };
+  let catSpriteCache = {}, catSpriteTheme = null;
+  let cat = null;
+
+  // ── Pixel jellyfish ──────────────────────────────────────────
+  // Bell: 2 frames (expanded ↔ contracted) — 11 wide × 6 tall
+  const JF_BELL = [
+    [   // frame 0: expanded (wide, flat dome)
+      "...#####...",
+      ".#########.",
+      "###########",
+      "###########",
+      ".#########.",
+      "...#####...",
+    ],
+    [   // frame 1: contracted (narrow, tall dome)
+      "....###....",
+      "...#####...",
+      "..#######..",
+      ".#########.",
+      "..#######..",
+      "...#####...",
+    ],
+  ];
+  // Tentacle attachment columns, sway phases, and lengths (outer = longer)
+  const JF_TENT = [
+    { col: 2, ph: 0.0, len: 13 },
+    { col: 4, ph: 1.3, len: 10 },
+    { col: 6, ph: 2.6, len: 10 },
+    { col: 8, ph: 3.9, len: 13 },
+  ];
+  const JF_MAX_TENT = 13; // longest tentacle (for boundary calc)
+  let jf = null, jf2 = null;
 
   // Cache scroll progress and canvas rect — avoid reflow inside rAF
   function updateScroll() {
@@ -703,7 +864,7 @@ function initHeaderParticles(data) {
     const isDark = document.documentElement.dataset.theme === 'dark';
     if (hasBg) return [255, 255, 255];
     if (isDark) return [174, 174, 178];
-    return [110, 110, 115];
+    return [90, 110, 135]; // faint accent-blue tint in light mode
   }
 
   function buildDots() {
@@ -728,6 +889,498 @@ function initHeaderParticles(data) {
     dotsByDepth = dots.slice().sort((a, b) => a.depth - b.depth);
   }
 
+  function buildCatSprites() {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    catSpriteTheme = isDark ? 'dark' : 'light';
+    const PAD = 1; // 1 canvas-px outline on all sides
+    const palette = isDark ? {
+      'h': '#e5e5ea', '#': '#c7c7cc', 's': '#8e8e93', 'e': '#1c1c1e',
+    } : {
+      'h': '#6e6e73', '#': '#3a3a3c', 's': '#1c1c1e', 'e': '#f5f5f7',
+    };
+    const outlineColor = isDark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.22)';
+
+    catSpriteCache = {};
+    for (const [key, sprite] of Object.entries(CAT_SPRITES)) {
+      for (const dir of [1, -1]) {
+        const rows = sprite.length, cols = sprite[0].length;
+        const oc = new OffscreenCanvas(cols * CAT_SCALE + PAD * 2, rows * CAT_SCALE + PAD * 2);
+        const octx = oc.getContext('2d');
+
+        // Pass 1: outline — draw each lit pixel slightly expanded (skip 't' — tail drawn per-frame)
+        octx.fillStyle = outlineColor;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const ch = dir === 1 ? sprite[r][c] : sprite[r][cols - 1 - c];
+            if (ch !== '.' && ch !== 't') {
+              octx.fillRect(PAD + c * CAT_SCALE - 1, PAD + r * CAT_SCALE - 1, CAT_SCALE + 2, CAT_SCALE + 2);
+            }
+          }
+        }
+        // Pass 2: colored pixels — 't' transparent, 'e' rendered as vertical slit pupil
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const ch = dir === 1 ? sprite[r][c] : sprite[r][cols - 1 - c];
+            if (ch === 'e') {
+              octx.fillStyle = palette['e'];
+              octx.fillRect(PAD + c * CAT_SCALE + Math.floor(CAT_SCALE / 2), PAD + r * CAT_SCALE, 1, CAT_SCALE);
+            } else {
+              const color = palette[ch];
+              if (color) {
+                octx.fillStyle = color;
+                octx.fillRect(PAD + c * CAT_SCALE, PAD + r * CAT_SCALE, CAT_SCALE, CAT_SCALE);
+              }
+            }
+          }
+        }
+        catSpriteCache[`${key}_${dir}`] = oc;
+      }
+    }
+  }
+
+  function catCircadian() {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    return {
+      walkSpeed: isDark ? 0.42 : 0.72,
+      walkProb: isDark ? 0.0006 : 0.002,
+      sitMin: isDark ? 200 : 80,
+      sitRange: isDark ? 280 : 100,
+      sleepMin: isDark ? 400 : 120,
+      sleepRange: isDark ? 400 : 150,
+      startleSpeed: isDark ? 1.8 : 2.5,
+      watchDist: isDark ? 90 : 150,
+      zoomieProb: isDark ? 0.00015 : 0,
+    };
+  }
+
+  function initCat(W) {
+    if (!CAT) { cat = null; return; }
+    buildCatSprites();
+    cat = {
+      x: W * 0.25,
+      dir: 1,             // 1 = right, -1 = left
+      state: 'walk',      // 'walk'|'idle'|'turn'|'sit'|'sleep'|'watch'|'startle'|'peek'|'backup'|'groom'|'stretch'|'yawn'|'zoomie'
+      frame: 0,
+      walkFrame: 1,       // 1–4 cycling walk sprite
+      walkTick: 0,
+      stateTimer: 0,
+      speed: 0,
+      targetSpeed: catCircadian().walkSpeed,
+      blinkTimer: 80 + Math.floor(Math.random() * 120),
+      blinking: false,
+      blinkFrames: 0,
+    };
+  }
+
+  function tickCat(W, H) {
+    if (!CAT || !cat) return;
+    cat.frame++;
+
+    const circ = catCircadian();
+    const spriteW = CAT_SPRITES.walk_1[0].length * CAT_SCALE;
+    const spriteH = CAT_SPRITES.walk_1.length * CAT_SCALE;
+    const cx = cat.x + spriteW / 2;
+    const cy = H - spriteH / 2;
+
+    // ── Walk animation — speed-coupled frame rate ──────────────
+    if (cat.state === 'walk' || cat.state === 'startle' || cat.state === 'backup' || cat.state === 'zoomie') {
+      const period = Math.max(4, Math.round(7 / Math.max(0.15, cat.speed)));
+      if (++cat.walkTick >= period) {
+        cat.walkTick = 0;
+        cat.walkFrame = (cat.walkFrame % 4) + 1;
+      }
+    }
+
+    // ── Blink ──────────────────────────────────────────────────
+    const canBlink = cat.state === 'sit' || cat.state === 'idle' || cat.state === 'watch' || cat.state === 'peek';
+    if (canBlink) {
+      if (--cat.blinkTimer <= 0 && !cat.blinking) {
+        cat.blinking = true;
+        cat.blinkFrames = 4;
+        cat.blinkTimer = 100 + Math.floor(Math.random() * 150);
+      }
+      if (cat.blinking && --cat.blinkFrames <= 0) cat.blinking = false;
+    } else {
+      cat.blinking = false;
+    }
+
+    // ── Ripple startle ─────────────────────────────────────────
+    if (cat.state !== 'startle' && cat.state !== 'sleep' && cat.state !== 'zoomie') {
+      for (const rip of ripples) {
+        if (rip.r < 5) continue;
+        const ring = Math.abs(Math.hypot(cx - rip.x, cy - rip.y) - rip.r);
+        if (ring < 28) {
+          cat.state = 'startle';
+          cat.stateTimer = 75;
+          cat.dir = cx > rip.x ? 1 : -1;
+          cat.targetSpeed = circ.startleSpeed;
+          break;
+        }
+      }
+    }
+
+    // ── State timer & transitions ──────────────────────────────
+    if (cat.stateTimer > 0) {
+      cat.stateTimer--;
+      if (cat.stateTimer === 0) {
+        if (cat.state === 'startle') {
+          cat.state = 'walk'; cat.targetSpeed = circ.walkSpeed;
+        } else if (cat.state === 'turn') {
+          cat.dir *= -1; cat.state = 'walk'; cat.targetSpeed = circ.walkSpeed;
+        } else if (cat.state === 'sit') {
+          const r = Math.random();
+          if (r < 0.25) {
+            // Grooming ritual → leads to sleep
+            cat.state = 'groom'; cat.stateTimer = 50 + Math.floor(Math.random() * 25);
+          } else if (r < 0.40) {
+            cat.state = 'sleep';
+            cat.stateTimer = circ.sleepMin + Math.floor(Math.random() * circ.sleepRange);
+          } else {
+            cat.state = 'turn'; cat.stateTimer = 15; cat.targetSpeed = 0;
+          }
+        } else if (cat.state === 'groom') {
+          cat.state = 'stretch'; cat.stateTimer = 40 + Math.floor(Math.random() * 20);
+        } else if (cat.state === 'stretch') {
+          cat.state = 'yawn'; cat.stateTimer = 35 + Math.floor(Math.random() * 25);
+        } else if (cat.state === 'yawn') {
+          cat.state = 'sleep';
+          cat.stateTimer = circ.sleepMin + Math.floor(Math.random() * circ.sleepRange);
+        } else if (cat.state === 'zoomie') {
+          cat.state = 'walk'; cat.targetSpeed = circ.walkSpeed;
+        } else if (cat.state === 'sleep') {
+          cat.state = 'turn'; cat.stateTimer = 20; cat.targetSpeed = 0;
+        } else if (cat.state === 'peek') {
+          if (Math.random() < 0.55) {
+            // Back up carefully from the edge while still facing it
+            cat.state = 'backup'; cat.stateTimer = 40; cat.targetSpeed = 0.4;
+          } else {
+            cat.state = 'turn'; cat.stateTimer = 14; cat.targetSpeed = 0;
+          }
+        } else if (cat.state === 'backup') {
+          cat.state = 'turn'; cat.stateTimer = 12; cat.targetSpeed = 0;
+        } else {
+          cat.state = 'walk'; cat.targetSpeed = circ.walkSpeed;
+        }
+      }
+    }
+
+    // ── Cursor awareness ───────────────────────────────────────
+    if (cat.state === 'walk' && mouse.x > -9000 && Math.abs(mouse.x - cx) < circ.watchDist) {
+      cat.state = 'watch';
+      cat.stateTimer = 55 + Math.floor(Math.random() * 80);
+      cat.targetSpeed = 0;
+      cat.dir = mouse.x > cx ? 1 : -1;
+    }
+    if (cat.state === 'watch' && mouse.x > -9000) {
+      cat.dir = mouse.x > cx ? 1 : -1;
+    }
+
+    // ── Speed easing ───────────────────────────────────────────
+    cat.speed += (cat.targetSpeed - cat.speed) * 0.08;
+
+    // ── Movement ───────────────────────────────────────────────
+    if (cat.state === 'walk' || cat.state === 'startle' || cat.state === 'zoomie') {
+      cat.x += cat.dir * cat.speed;
+      // Peek zone: approaching edge — slow to stop and peer over
+      if (cat.state === 'walk') {
+        if (cat.x < 22 && cat.dir === -1) {
+          cat.state = 'peek'; cat.stateTimer = 80 + Math.floor(Math.random() * 100); cat.targetSpeed = 0;
+        } else if (cat.x + spriteW > W - 22 && cat.dir === 1) {
+          cat.state = 'peek'; cat.stateTimer = 80 + Math.floor(Math.random() * 100); cat.targetSpeed = 0;
+        }
+      }
+      if (cat.x < 10) {
+        cat.x = 10;
+        if (cat.state === 'walk') { cat.state = 'turn'; cat.stateTimer = 12; cat.targetSpeed = 0; }
+        else if (cat.state !== 'peek') cat.dir = 1;   // zoomie/startle: hard bounce
+      }
+      if (cat.x + spriteW > W - 10) {
+        cat.x = W - 10 - spriteW;
+        if (cat.state === 'walk') { cat.state = 'turn'; cat.stateTimer = 12; cat.targetSpeed = 0; }
+        else if (cat.state !== 'peek') cat.dir = -1;  // zoomie/startle: hard bounce
+      }
+      if (cat.state === 'walk' && Math.random() < circ.walkProb) {
+        cat.state = Math.random() < 0.5 ? 'sit' : 'idle';
+        cat.stateTimer = cat.state === 'sit'
+          ? circ.sitMin + Math.floor(Math.random() * circ.sitRange)
+          : 40 + Math.floor(Math.random() * 80);
+        cat.targetSpeed = 0;
+      }
+    }
+    // Midnight zoomies — dark mode only, random spark while walking or sitting
+    if ((cat.state === 'walk' || cat.state === 'sit') && Math.random() < circ.zoomieProb) {
+      cat.state = 'zoomie';
+      cat.stateTimer = 110 + Math.floor(Math.random() * 30);
+      cat.targetSpeed = 4.5;
+    }
+    // Backup: retreat from edge while still facing it
+    if (cat.state === 'backup') {
+      cat.x -= cat.dir * cat.speed;
+    }
+  }
+
+  function drawCat(ctx, H) {
+    if (!CAT || !cat) return;
+
+    // Rebuild cache on theme change (cheap string compare per frame)
+    const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+    if (catSpriteTheme !== theme) buildCatSprites();
+
+    let spriteKey;
+    if (cat.state === 'sleep') {
+      spriteKey = 'sleep';
+    } else if (cat.state === 'walk' || cat.state === 'startle' || cat.state === 'backup' || cat.state === 'zoomie') {
+      spriteKey = 'walk_' + cat.walkFrame;
+    } else if (cat.state === 'peek') {
+      spriteKey = cat.blinking ? 'sit_blink' : 'peek';
+    } else if (cat.state === 'groom') {
+      spriteKey = 'groom';
+    } else if (cat.state === 'stretch') {
+      spriteKey = 'stretch';
+    } else if (cat.state === 'yawn') {
+      spriteKey = 'yawn';
+    } else {
+      spriteKey = cat.blinking ? 'sit_blink' : 'sit';
+    }
+
+    const PAD = 1;
+    const rows = CAT_SPRITES[spriteKey].length;
+    const baseY = H - rows * CAT_SCALE - 1;
+    const bob = (cat.state === 'walk' || cat.state === 'startle' || cat.state === 'backup' || cat.state === 'zoomie') &&
+      (cat.walkFrame === 1 || cat.walkFrame === 3) ? 1 : 0;
+
+    if (cat.state === 'sleep') {
+      ctx.globalAlpha = 0.65 + 0.35 * (Math.sin(cat.frame * 0.025) * 0.5 + 0.5);
+    }
+
+    // Soft amber glow in dark mode — one blur pass on the pre-rendered image
+    if (theme === 'dark') {
+      ctx.shadowColor = 'rgba(255, 185, 90, 0.6)';
+      ctx.shadowBlur = 12;
+    }
+
+    ctx.drawImage(catSpriteCache[`${spriteKey}_${cat.dir}`], Math.round(cat.x) - PAD, baseY + bob - PAD);
+
+    ctx.shadowBlur = 0;
+
+    // Animated tail — sine wave sway, drawn per-frame without glow
+    if (cat.state !== 'sleep') {
+      const isActive = cat.state === 'walk' || cat.state === 'zoomie' || cat.state === 'startle';
+      const tailPhase = cat.frame * (isActive ? 0.06 : 0.03);
+      const tailAmp = isActive ? 1.5 : 2.5;
+      const tailYOff = Math.round(Math.sin(tailPhase) * tailAmp);
+      ctx.fillStyle = theme === 'dark' ? '#8e8e93' : '#1c1c1e';
+      const tSpr = CAT_SPRITES[spriteKey];
+      const tRows = tSpr.length, tCols = tSpr[0].length;
+      for (let r = 0; r < tRows; r++) {
+        for (let c = 0; c < tCols; c++) {
+          if ((cat.dir === 1 ? tSpr[r][c] : tSpr[r][tCols - 1 - c]) === 't') {
+            ctx.fillRect(Math.round(cat.x) + c * CAT_SCALE, baseY + bob + r * CAT_SCALE + tailYOff, CAT_SCALE, CAT_SCALE);
+          }
+        }
+      }
+    }
+
+    // Whiskers — thin lines from snout (skip sleep and stretch where head is in different position)
+    if (cat.state !== 'sleep' && cat.state !== 'stretch') {
+      const faceY = baseY + bob + Math.round(3.2 * CAT_SCALE);
+      const snoutX = cat.dir === 1 ? Math.round(cat.x) + 18 * CAT_SCALE : Math.round(cat.x);
+      const wLen = CAT_SCALE * 3;
+      ctx.save();
+      ctx.strokeStyle = theme === 'dark' ? 'rgba(229,229,234,0.6)' : 'rgba(58,58,60,0.4)';
+      ctx.lineWidth = 0.75;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(snoutX, faceY - CAT_SCALE * 0.6);
+      ctx.lineTo(snoutX + cat.dir * wLen, faceY - CAT_SCALE * 1.4);  // upper
+      ctx.moveTo(snoutX, faceY);
+      ctx.lineTo(snoutX + cat.dir * (wLen + 2), faceY);                    // middle
+      ctx.moveTo(snoutX, faceY + CAT_SCALE * 0.5);
+      ctx.lineTo(snoutX + cat.dir * wLen, faceY + CAT_SCALE * 1.2);  // lower
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (cat.state === 'sleep') ctx.globalAlpha = 1;
+  }
+
+  function makeJF(x, y, vx, scale, baseAlpha, phaseOffset, bellTickOffset) {
+    return {
+      x, y, vx, vy: 0,
+      phase: phaseOffset,
+      bellTick: bellTickOffset,
+      bellFrame: 0,
+      glowFlash: 0,
+      startleCooldown: 0,
+      scale,
+      baseAlpha,
+      trail: [],
+      trailTick: 0,
+    };
+  }
+
+  function initJF(W, H) {
+    if (!JELLYFISH) { jf = null; jf2 = null; return; }
+    jf = makeJF(W * 0.62, H * 0.22, 0.06, 3, 1.0, 0, 0);  // near
+    jf2 = makeJF(W * 0.32, H * 0.30, -0.04, 2, 0.5, Math.PI, 9);  // far, out of phase
+  }
+
+  function tickOneJF(st, W, H) {
+    const sc = st.scale;
+    const bellW = JF_BELL[0][0].length * sc;
+    const bellH = JF_BELL[0].length * sc;
+    const tentH = JF_MAX_TENT * sc;
+    const cx = st.x + bellW / 2;
+    const cy = st.y + bellH / 2;
+    const isDark = document.documentElement.dataset.theme === 'dark';
+
+    // Circadian rhythm — dark: active; light: lethargic
+    const pulseInt = isDark ? 20 : 50;
+    const jetForce = isDark ? 0.45 : 0.10;
+    const grav = isDark ? 0.008 : 0.015;
+    const driftAmp = isDark ? 0.010 : 0.003;
+    const preferY = isDark ? H * 0.38 : H * 0.70;
+    const preferStr = isDark ? 0.018 : 0.010;
+
+    st.phase += 0.045;
+    if (st.startleCooldown > 0) st.startleCooldown--;
+
+    // Trail: sample every 4 ticks in dark mode only
+    if (isDark && ++st.trailTick >= 4) {
+      st.trailTick = 0;
+      st.trail.push({ x: st.x, y: st.y, bf: st.bellFrame });
+      if (st.trail.length > 6) st.trail.shift();
+    } else if (!isDark) {
+      st.trail.length = 0;
+    }
+
+    // Bell pulse
+    if (++st.bellTick >= pulseInt) {
+      st.bellTick = 0;
+      st.bellFrame ^= 1;
+      if (st.bellFrame === 1) {
+        st.vy -= jetForce;
+        if (isDark) st.glowFlash = 1.0;
+      }
+    }
+
+    st.vy += grav;
+    st.vx += noise(st.phase * 0.28, 0.5) * driftAmp;
+    if (st.y > preferY) st.vy -= (st.y - preferY) / H * preferStr;
+
+    st.vx *= 0.968;
+    st.vy *= 0.968;
+
+    const mg = 50;
+    if (st.x < mg) st.vx += 0.08;
+    if (st.x + bellW > W - mg) st.vx -= 0.08;
+    if (st.y < mg) st.vy += 0.08;
+    if (st.y + bellH + tentH > H - mg) st.vy -= 0.08;
+
+    if (mouse.x > -9000) {
+      const dx = cx - mouse.x, dy = cy - mouse.y, d = Math.hypot(dx, dy);
+      if (d < 110 && d > 0) { st.vx += (dx / d) * 0.10; st.vy += (dy / d) * 0.10; }
+    }
+
+    // Ripple startle — only in dark mode (lethargic in light)
+    if (isDark && st.startleCooldown === 0) {
+      for (const rip of ripples) {
+        if (rip.r < 5) continue;
+        const ring = Math.abs(Math.hypot(cx - rip.x, cy - rip.y) - rip.r);
+        if (ring < 30) {
+          st.bellFrame = 1; st.bellTick = 0;
+          st.vy -= 0.65;
+          const rdx = cx - rip.x, rd = Math.hypot(rdx, cy - rip.y);
+          if (rd > 0) st.vx += (rdx / rd) * 0.40;
+          st.glowFlash = 1.0; st.startleCooldown = 35;
+          break;
+        }
+      }
+    }
+
+    st.glowFlash *= 0.88;
+    st.x += st.vx;
+    st.y += st.vy;
+  }
+
+  function tickJF(W, H) {
+    if (!JELLYFISH) return;
+    if (jf) tickOneJF(jf, W, H);
+    if (jf2) tickOneJF(jf2, W, H);
+  }
+
+  function drawOneJF(ctx, st, isDark) {
+    const sc = st.scale;
+    const bell = JF_BELL[st.bellFrame];
+    const rows = bell.length, cols = bell[0].length;
+    const bellH = rows * sc;
+    const flash = st.glowFlash;
+    const ba = st.baseAlpha;
+
+    // Bioluminescent trail (dark mode only, oldest = most faded)
+    if (isDark && st.trail.length > 0) {
+      for (let i = 0; i < st.trail.length; i++) {
+        const trailA = ((i + 1) / st.trail.length) * 0.10 * ba;
+        if (trailA < 0.01) continue;
+        ctx.fillStyle = `rgba(150,185,255,${trailA.toFixed(2)})`;
+        const tp = st.trail[i], tb = JF_BELL[tp.bf];
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++)
+            if (tb[r][c] === '#')
+              ctx.fillRect(tp.x + c * sc, tp.y + r * sc, sc, sc);
+      }
+    }
+
+    // Glow halo (dark mode, behind bell)
+    if (isDark && flash > 0.05) {
+      ctx.fillStyle = `rgba(180,210,255,${(flash * 0.22 * ba).toFixed(2)})`;
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          if (bell[r][c] === '#')
+            ctx.fillRect(st.x + c * sc - 1, st.y + r * sc - 1, sc + 2, sc + 2);
+    }
+
+    // Bell fill
+    const bellA = Math.min(1, (isDark ? 0.80 : 0.55) * ba + flash * 0.25 * ba);
+    ctx.fillStyle = isDark
+      ? `rgba(150,185,255,${bellA.toFixed(2)})`
+      : `rgba(100,120,190,${bellA.toFixed(2)})`;
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        if (bell[r][c] === '#')
+          ctx.fillRect(st.x + c * sc, st.y + r * sc, sc, sc);
+
+    // Inner highlight
+    const hiSz = Math.max(1, sc - 2);
+    ctx.fillStyle = isDark ? 'rgba(210,225,255,0.35)' : 'rgba(180,195,255,0.30)';
+    for (let r = 1; r < rows - 1; r++)
+      for (let c = 2; c < cols - 2; c++)
+        if (bell[r][c] === '#')
+          ctx.fillRect(st.x + c * sc + 1, st.y + r * sc + 1, hiSz, hiSz);
+
+    // Tentacles — drag, variable length, taper
+    const tentA = Math.min(1, (isDark ? 0.45 : 0.32) * ba + flash * 0.2 * ba);
+    ctx.fillStyle = isDark
+      ? `rgba(130,165,255,${tentA.toFixed(2)})`
+      : `rgba(100,120,190,${tentA.toFixed(2)})`;
+    for (const t of JF_TENT) {
+      const bx = st.x + t.col * sc, by = st.y + bellH;
+      for (let s = 0; s < t.len; s++) {
+        const sway = (2 + s * 0.5) * Math.sin(st.phase * 1.6 + t.ph + s * 0.45);
+        const drag = -st.vx * s * 0.55;
+        const taper = s >= t.len - 3 ? 1 : sc - 1;
+        ctx.fillRect(bx + sway + drag, by + s * sc, taper, taper);
+      }
+    }
+  }
+
+  function drawJF(ctx) {
+    if (!JELLYFISH) return;
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    if (jf2) drawOneJF(ctx, jf2, isDark);  // far jellyfish behind
+    if (jf) drawOneJF(ctx, jf, isDark);  // near jellyfish in front
+  }
+
   function updateRect() { canvasRect = canvas.getBoundingClientRect(); }
 
   let resizeTimer;
@@ -744,6 +1397,8 @@ function initHeaderParticles(data) {
       canvas.height = newH;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       buildDots();
+      initCat(canvas.width / dpr);
+      initJF(canvas.width / dpr, canvas.height / dpr);
       updateRect();
     }, 100);
   }
@@ -830,19 +1485,39 @@ function initHeaderParticles(data) {
       d.vy *= damp;
     }
 
+    // ── Build spatial hash (cell = CONNECT_RADIUS, covers both radii) ──
+    spatialHash.clear();
+    for (let i = 0; i < dots.length; i++) {
+      const cx = Math.floor(dots[i].x / CONNECT_RADIUS);
+      const cy = Math.floor(dots[i].y / CONNECT_RADIUS);
+      const key = cx * 1000 + cy;
+      let cell = spatialHash.get(key);
+      if (!cell) { cell = []; spatialHash.set(key, cell); }
+      cell.push(i);
+    }
+
     // ── Dot–dot soft repulsion (before position integration) ──
     for (let i = 0; i < dots.length; i++) {
-      for (let j = i + 1; j < dots.length; j++) {
-        const dx = dots[i].x - dots[j].x;
-        const dy = dots[i].y - dots[j].y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < DR2 && d2 > 0) {
-          const dist = Math.sqrt(d2);
-          const f = (1 - dist / DOT_REPEL_R) * DOT_REPEL_STR;
-          const fx = (dx / dist) * f;
-          const fy = (dy / dist) * f;
-          dots[i].vx += fx; dots[i].vy += fy;
-          dots[j].vx -= fx; dots[j].vy -= fy;
+      const cx = Math.floor(dots[i].x / CONNECT_RADIUS);
+      const cy = Math.floor(dots[i].y / CONNECT_RADIUS);
+      for (let nx = cx - 1; nx <= cx + 1; nx++) {
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+          const cell = spatialHash.get(nx * 1000 + ny);
+          if (!cell) continue;
+          for (const j of cell) {
+            if (j <= i) continue;
+            const dx = dots[i].x - dots[j].x;
+            const dy = dots[i].y - dots[j].y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < DR2 && d2 > 0) {
+              const dist = Math.sqrt(d2);
+              const f = (1 - dist / DOT_REPEL_R) * DOT_REPEL_STR;
+              const fx = (dx / dist) * f;
+              const fy = (dy / dist) * f;
+              dots[i].vx += fx; dots[i].vy += fy;
+              dots[j].vx -= fx; dots[j].vy -= fy;
+            }
+          }
         }
       }
     }
@@ -859,20 +1534,31 @@ function initHeaderParticles(data) {
 
     // ── Draw connections (batched into alpha buckets) ─────────
     for (let i = 0; i < BUCKETS; i++) buckets[i].length = 0;
+
     for (let i = 0; i < dots.length; i++) {
-      for (let j = i + 1; j < dots.length; j++) {
-        const dx = dots[i].x - dots[j].x;
-        const dy = dots[i].y - dots[j].y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < CR2) {
-          const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
-          if (depthSim < 0.15) continue; // skip cross-layer connections
-          const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
-          const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
-          buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
+      const cx = Math.floor(dots[i].x / CONNECT_RADIUS);
+      const cy = Math.floor(dots[i].y / CONNECT_RADIUS);
+      for (let nx = cx - 1; nx <= cx + 1; nx++) {
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+          const cell = spatialHash.get(nx * 1000 + ny);
+          if (!cell) continue;
+          for (const j of cell) {
+            if (j <= i) continue;
+            const dx = dots[i].x - dots[j].x;
+            const dy = dots[i].y - dots[j].y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < CR2) {
+              const depthSim = 1 - Math.abs(dots[i].depth - dots[j].depth);
+              if (depthSim < 0.15) continue;
+              const distFactor = 1 - Math.sqrt(d2) / CONNECT_RADIUS;
+              const bi = Math.min(BUCKETS - 1, Math.floor(distFactor * depthSim * BUCKETS));
+              buckets[bi].push(dots[i].x, dots[i].y, dots[j].x, dots[j].y);
+            }
+          }
         }
       }
     }
+
     ctx.lineWidth = 1;
     ctx.strokeStyle = `rgb(${cr},${cg},${cb})`;
     for (let bi = 0; bi < BUCKETS; bi++) {
@@ -980,6 +1666,11 @@ function initHeaderParticles(data) {
       }
     }
 
+    tickJF(W, H);
+    drawJF(ctx);
+    tickCat(W, H);
+    drawCat(ctx, H);
+
     requestAnimationFrame(tick);
   }
 
@@ -1086,6 +1777,15 @@ function initHeaderParticles(data) {
   canvas.height = header.offsetHeight * dpr0;
   ctx.setTransform(dpr0, 0, 0, dpr0, 0, 0);
   buildDots();
+  initCat(header.offsetWidth);
+  initJF(header.offsetWidth, header.offsetHeight);
   updateRect();
+  // Fade in after first two frames are rendered so there's no blank flash
+  canvas.style.opacity = '0';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   tick();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    canvas.style.transition = reduceMotion ? '' : 'opacity 0.8s ease';
+    canvas.style.opacity = '1';
+  }));
 }
