@@ -535,6 +535,49 @@ html[data-theme="dark"] .badge-gold {
   box-shadow: var(--shadow-sm);
 }
 
+/* ── Typing cursor on header title ────────────────────────── */
+#header-title::after {
+  content: '|';
+  display: inline-block;
+  margin-left: 1px;
+  font-weight: 300;
+  color: var(--accent);
+  animation: blink-cursor 0.75s steps(2) infinite;
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Download CV button ──────────────────────────────────── */
+.cv-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px 5px 9px;
+  border-radius: 980px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-family: var(--font);
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cv-download-btn:hover {
+  transform: scale(1.06);
+  box-shadow: var(--shadow-md);
+  color: var(--accent);
+}
+
+.cv-download-btn svg {
+  flex-shrink: 0;
+}
+
 /* ── Social icon buttons ─────────────────────────────────── */
 .social-icon-btn {
   display: inline-flex;

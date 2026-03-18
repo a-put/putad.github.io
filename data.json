@@ -5,6 +5,13 @@
   "name": "Anton Putintsev",
   "degree": "PhD",
   "title": "Senior Research Scientist · Optical & Neuromorphic Computing",
+  "taglines": [
+    "Building AI hardware with light",
+    "Optical & neuromorphic computing",
+    "Polariton logic gates pioneer",
+    "Bridging photonics and AI"
+  ],
+  "cvLink": "assets/CV_Anton_Putintsev.pdf",
   "location": "",
   "languages": "",
   "email": "putintsev.ad@gmail.com",

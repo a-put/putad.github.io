@@ -105,6 +105,43 @@ function renderHeader(data) {
   document.getElementById('header-meta').textContent =
     [data.location, data.languages].filter(Boolean).join('  ·  ');
 
+  // ── Typing tagline animation ──────────────────────────────────
+  if (data.taglines && data.taglines.length) {
+    const titleEl = document.getElementById('header-title');
+    const taglines = data.taglines;
+    let tIdx = 0, cIdx = 0, deleting = false, pauseUntil = 0;
+    const TYPE_SPEED = 55, DELETE_SPEED = 30, PAUSE_AFTER = 2200, PAUSE_BEFORE = 400;
+
+    function tickTagline() {
+      const now = Date.now();
+      if (now < pauseUntil) { requestAnimationFrame(tickTagline); return; }
+      const current = taglines[tIdx];
+      if (!deleting) {
+        cIdx++;
+        titleEl.textContent = current.slice(0, cIdx);
+        if (cIdx === current.length) {
+          deleting = true;
+          pauseUntil = now + PAUSE_AFTER;
+        }
+      } else {
+        cIdx--;
+        titleEl.textContent = current.slice(0, cIdx);
+        if (cIdx === 0) {
+          deleting = false;
+          tIdx = (tIdx + 1) % taglines.length;
+          pauseUntil = now + PAUSE_BEFORE;
+        }
+      }
+      setTimeout(() => requestAnimationFrame(tickTagline), deleting ? DELETE_SPEED : TYPE_SPEED);
+    }
+    // Show first tagline immediately, start cycling after a pause
+    titleEl.textContent = taglines[0];
+    cIdx = taglines[0].length;
+    deleting = true;
+    pauseUntil = Date.now() + PAUSE_AFTER;
+    requestAnimationFrame(tickTagline);
+  }
+
   const linksEl = document.getElementById('header-links');
   const linkDefs = [
     { label: 'LinkedIn', href: data.linkedin || null, light: 'assets/linkedin.png', dark: 'assets/linkedin_bw.png' },
@@ -128,6 +165,19 @@ function renderHeader(data) {
     linksEl.appendChild(a);
   });
   updateSocialIcons();
+
+  // ── Download CV button ────────────────────────────────────────
+  if (data.cvLink) {
+    const cv = document.createElement('a');
+    cv.href = data.cvLink;
+    cv.target = '_blank';
+    cv.rel = 'noopener noreferrer';
+    cv.className = 'cv-download-btn';
+    cv.setAttribute('aria-label', 'Download CV');
+    cv.title = 'Download CV';
+    cv.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9m0 0l-3-3m3 3l3-3"/><path d="M2 12v1.5a1 1 0 001 1h10a1 1 0 001-1V12"/></svg><span>CV</span>`;
+    linksEl.appendChild(cv);
+  }
 
   if (data.avatar) {
     const img = document.getElementById('avatar');
