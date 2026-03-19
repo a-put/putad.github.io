@@ -402,12 +402,71 @@ function buildSkillGraph(data) {
     ['Signal Processing', 'Real-time Data Acquisition'],
     ['Image Processing', 'Optical Characterization'],
   ];
+  const edgeSet = new Set();
   const edges = [];
+  function addEdge(a, b) {
+    const key = a < b ? a + ',' + b : b + ',' + a;
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    edges.push([a, b]);
+  }
   connections.forEach(([a, b]) => {
     if (nameIdx[a] !== undefined && nameIdx[b] !== undefined)
-      edges.push([nameIdx[a], nameIdx[b]]);
+      addEdge(nameIdx[a], nameIdx[b]);
   });
-  // Also add intra-group edges (for force-directed mode)
+
+  // Auto-connect: nodes without any cross-group edge get connected
+  // to the nearest group-mates' cross-group neighbors (bridge via affinity),
+  // or failing that, to a random node in the group with the most connections.
+  const crossAdj = Array.from({ length: nodes.length }, () => new Set());
+  edges.forEach(([a, b]) => {
+    if (nodes[a].group !== nodes[b].group) {
+      crossAdj[a].add(b); crossAdj[b].add(a);
+    }
+  });
+  for (let i = 0; i < nodes.length; i++) {
+    if (crossAdj[i].size > 0) continue; // already has cross-group edges
+    // Find group-mates that DO have cross-group edges
+    const myGroup = nodes[i].group;
+    const candidates = new Map(); // nodeIdx → score
+    for (let j = 0; j < nodes.length; j++) {
+      if (j === i || nodes[j].group === myGroup) continue;
+      // Score: how many of i's group-mates connect to j?
+      let score = 0;
+      for (let k = 0; k < nodes.length; k++) {
+        if (k === i || nodes[k].group !== myGroup) continue;
+        if (crossAdj[k].has(j)) score += 2;
+        if (crossAdj[j].has(k)) score += 1;
+      }
+      // Bonus for j being well-connected (hub nodes are natural bridges)
+      score += crossAdj[j].size * 0.3;
+      if (score > 0) candidates.set(j, score);
+    }
+    // Pick top 1-2 candidates
+    const sorted = [...candidates.entries()].sort((a, b) => b[1] - a[1]);
+    const pick = Math.min(sorted.length, 2);
+    for (let p = 0; p < pick; p++) {
+      addEdge(i, sorted[p][0]);
+      crossAdj[i].add(sorted[p][0]);
+      crossAdj[sorted[p][0]].add(i);
+    }
+    // Fallback: if no affinity-based candidates, connect to the most-connected
+    // node in a different group
+    if (pick === 0) {
+      let bestJ = -1, bestConn = -1;
+      for (let j = 0; j < nodes.length; j++) {
+        if (nodes[j].group === myGroup) continue;
+        if (crossAdj[j].size > bestConn) { bestConn = crossAdj[j].size; bestJ = j; }
+      }
+      if (bestJ >= 0) {
+        addEdge(i, bestJ);
+        crossAdj[i].add(bestJ);
+        crossAdj[bestJ].add(i);
+      }
+    }
+  }
+
+  // Intra-group edges (for force-directed mode)
   const intraEdges = [];
   groups.forEach(([, items]) => {
     for (let i = 0; i < items.length; i++) {
@@ -681,28 +740,34 @@ function renderSkillsStatic(data) {
 function renderSkillsForce(data) {
   const { groupColors, groups, nodes, nameIdx, edges, intraEdges, adj, N } = buildSkillGraph(data);
   const allEdges = edges.concat(intraEdges);
+  // Pre-compute which edges are intra-group
+  const edgeSame = new Uint8Array(allEdges.length);
+  for (let e = 0; e < allEdges.length; e++) {
+    edgeSame[e] = nodes[allEdges[e][0]].group === nodes[allEdges[e][1]].group ? 1 : 0;
+  }
 
   const canvas = document.getElementById('skills-graph');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const wrap = canvas.parentElement;
 
-  const DOT_R = 4;
+  const isMobile = window.innerWidth <= 768;
+  const DOT_R = isMobile ? 3.5 : 4;
   const HIT_R = 40;
-  const FLOAT_AMP = 2;
+  const FLOAT_AMP = isMobile ? 1.2 : 2;
   const FLOAT_SPEED = 0.0005;
 
-  // Physics
-  const REPEL = 1400;
-  const MIN_REPEL_DIST = 70;
+  // Physics — tighter on mobile to keep nodes in view
+  const REPEL = isMobile ? 800 : 1400;
+  const MIN_REPEL_DIST = isMobile ? 50 : 70;
   const INTRA_SPRING = 0.012;
-  const INTRA_REST = 127;
+  const INTRA_REST = isMobile ? 75 : 127;
   const CROSS_SPRING = 0.003;
-  const CROSS_REST = 304;
-  const CENTER_PULL = 0.0025;
+  const CROSS_REST = isMobile ? 170 : 304;
+  const CENTER_PULL = isMobile ? 0.005 : 0.0025;
   const PHYS_DAMPING = 0.82;
 
-  // 8. Connectivity-based dot size: more connections = larger
+  // Connectivity-based dot size: more connections = larger
   const connCount = new Float32Array(N);
   for (let i = 0; i < N; i++) connCount[i] = adj[i].size;
   let maxConn = 1;
@@ -710,30 +775,58 @@ function renderSkillsForce(data) {
   const dotScale = new Float32Array(N);
   for (let i = 0; i < N; i++) dotScale[i] = 0.7 + 0.6 * (connCount[i] / maxConn);
 
+  // ── State ──────────────────────────────────────────────────
   let hoverIdx = -1;
+  let lockedIdx = -1;           // 10. click-to-lock highlight
+  let dragIdx = -1;             // 9. drag nodes
+  let dragOffX = 0, dragOffY = 0;
   let dpr = 1, cw = 0, ch = 0;
   let settled = false, settledFrames = 0;
+  let isVisible = true;         // 1. pause when off-screen
+  let rafId = 0;
 
-  // 6. Entry animation
+  // Entry animation — staggered by group (8)
   let entryStart = 0;
-  const ENTRY_DURATION = 1200; // ms
+  const ENTRY_DURATION = 1200;
+  const GROUP_STAGGER = 150; // ms between groups
 
   const sx = new Float32Array(N), sy = new Float32Array(N);
   const svx = new Float32Array(N), svy = new Float32Array(N);
   const hx = new Float32Array(N), hy = new Float32Array(N);
   const rx = new Float32Array(N), ry = new Float32Array(N);
 
-  // Init in tight circle by group
-  groups.forEach(([, items], gi) => {
-    const baseAngle = (gi / groups.length) * Math.PI * 2;
-    items.forEach((name, j) => {
-      const i = nameIdx[name];
-      const a = baseAngle + (j - items.length / 2) * 0.25;
-      const r = 40 + j * 8;
-      sx[i] = Math.cos(a) * r;
-      sy[i] = Math.sin(a) * r;
+  // Which group each node belongs to (for stagger delay)
+  const nodeGroup = new Uint8Array(N);
+  for (let i = 0; i < N; i++) nodeGroup[i] = nodes[i].group;
+
+  // Try restoring cached positions (2. session cache)
+  const CACHE_KEY = 'skills-force-pos';
+  let usedCache = false;
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const pos = JSON.parse(cached);
+      if (pos.length === N) {
+        for (let i = 0; i < N; i++) { sx[i] = pos[i][0]; sy[i] = pos[i][1]; }
+        settled = true;
+        usedCache = true;
+      }
+    }
+  } catch (_) {}
+
+  if (!usedCache) {
+    // Init in tight circle by group
+    groups.forEach(([, items], gi) => {
+      const baseAngle = (gi / groups.length) * Math.PI * 2;
+      items.forEach((name, j) => {
+        const i = nameIdx[name];
+        const a = baseAngle + (j - items.length / 2) * 0.25;
+        const r = 40 + j * 8;
+        sx[i] = Math.cos(a) * r;
+        sy[i] = Math.sin(a) * r;
+      });
     });
-  });
+  }
 
   const floatPhase = new Float32Array(N);
   const floatAmpX = new Float32Array(N);
@@ -747,28 +840,33 @@ function renderSkillsForce(data) {
   const nodeScaleAnim = new Float32Array(N).fill(1);
   const nodeAlpha = new Float32Array(N).fill(1);
   const edgeTension = new Float32Array(allEdges.length).fill(0);
-  const glowR = new Float32Array(N).fill(0);
+  const ringR = new Float32Array(N).fill(0);     // 6. hover ring radius
+  const ringAlpha = new Float32Array(N).fill(0);  // 6. hover ring opacity
   const labelSide = new Int8Array(N);
-  // 1. Label collision: store adjusted label Y offsets
   const labelOffsetY = new Float32Array(N);
   let fontFamily = '';
 
+  // ── Effective hover: locked takes priority ─────────────────
+  function effectiveHover() { return lockedIdx >= 0 ? lockedIdx : hoverIdx; }
+
+  // ── Physics simulation ─────────────────────────────────────
   function simulate() {
     let totalV = 0;
     for (let i = 0; i < N; i++) {
+      if (i === dragIdx) continue; // dragged node is pinned
       for (let j = i + 1; j < N; j++) {
         let dx = sx[i] - sx[j], dy = sy[i] - sy[j];
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
         if (dist < MIN_REPEL_DIST) {
           const push = (MIN_REPEL_DIST - dist) * 0.15;
           const nx = (dx / dist) * push, ny = (dy / dist) * push;
-          svx[i] += nx; svy[i] += ny;
-          svx[j] -= nx; svy[j] -= ny;
+          if (j !== dragIdx) { svx[i] += nx; svy[i] += ny; }
+          if (i !== dragIdx) { svx[j] -= nx; svy[j] -= ny; }
         }
         const d2 = dist * dist;
         const f = REPEL / d2;
-        svx[i] += (dx / dist) * f; svy[i] += (dy / dist) * f;
-        svx[j] -= (dx / dist) * f; svy[j] -= (dy / dist) * f;
+        if (j !== dragIdx) { svx[i] += (dx / dist) * f; svy[i] += (dy / dist) * f; }
+        if (i !== dragIdx) { svx[j] -= (dx / dist) * f; svy[j] -= (dy / dist) * f; }
       }
     }
     for (const [a, b] of allEdges) {
@@ -779,11 +877,12 @@ function renderSkillsForce(data) {
       const rest = same ? INTRA_REST : CROSS_REST;
       const f = (dist - rest) * spring;
       const fx = (dx / dist) * f, fy = (dy / dist) * f;
-      svx[a] += fx; svy[a] += fy;
-      svx[b] -= fx; svy[b] -= fy;
+      if (a !== dragIdx) { svx[a] += fx; svy[a] += fy; }
+      if (b !== dragIdx) { svx[b] -= fx; svy[b] -= fy; }
     }
-    const hw = cw * 0.42, hh = ch * 0.42;
+    const hw = cw * (isMobile ? 0.34 : 0.42), hh = ch * (isMobile ? 0.38 : 0.42);
     for (let i = 0; i < N; i++) {
+      if (i === dragIdx) continue;
       svx[i] += -sx[i] * CENTER_PULL;
       svy[i] += -sy[i] * CENTER_PULL;
       if (Math.abs(sx[i]) > hw) svx[i] += (sx[i] > 0 ? -1 : 1) * (Math.abs(sx[i]) - hw) * 0.05;
@@ -797,20 +896,87 @@ function renderSkillsForce(data) {
     return totalV;
   }
 
-  // 1. Label collision avoidance — nudge labels vertically after layout
+  // ── Label collision avoidance ──────────────────────────────
+  // Measures actual label bounding boxes, checks AABB overlap,
+  // nudges vertically, and flips label side when that resolves better.
+  const labelW = new Float32Array(N);  // cached text widths
+  const labelFlip = new Int8Array(N);  // 0 = use labelSide, 1 = flipped
+
+  function measureLabels() {
+    if (!fontFamily) return;
+    const fontSize = isMobile ? 9 : 10.5;
+    ctx.font = `400 ${fontSize}px ${fontFamily}`;
+    for (let i = 0; i < N; i++) {
+      labelW[i] = ctx.measureText(nodes[i].name).width;
+    }
+  }
+
   function resolveLabels() {
-    const LABEL_H = 14; // approximate label height
-    // Sort by Y position, nudge overlapping labels
+    const LABEL_H = isMobile ? 12 : 15;
+    const PAD_X = 6; // horizontal padding around label
+    for (let i = 0; i < N; i++) { labelOffsetY[i] = 0; labelFlip[i] = 0; }
+
+    // Compute label bounding boxes: [left, top, right, bottom]
+    function labelBox(i) {
+      const side = labelFlip[i] ? -labelSide[i] : labelSide[i];
+      const dotR = DOT_R * (nodeScaleAnim[i] * dotScale[i]);
+      const gap = isMobile ? 5 : 7;
+      const anchorX = rx[i] + side * (dotR + gap);
+      const w = labelW[i] || 60; // fallback before first measure
+      const y = ry[i] + labelOffsetY[i];
+      const left = side > 0 ? anchorX - PAD_X : anchorX - w - PAD_X;
+      const right = side > 0 ? anchorX + w + PAD_X : anchorX + PAD_X;
+      return [left, y - LABEL_H / 2, right, y + LABEL_H / 2];
+    }
+
+    function overlaps(a, b) {
+      const ba = labelBox(a), bb = labelBox(b);
+      return ba[0] < bb[2] && ba[2] > bb[0] && ba[1] < bb[3] && ba[3] > bb[1];
+    }
+
+    // Sort by Y for efficient neighbor checks
     const sorted = Array.from({ length: N }, (_, i) => i).sort((a, b) => ry[a] - ry[b]);
-    for (let k = 0; k < sorted.length; k++) labelOffsetY[sorted[k]] = 0;
+
+    // Pass 1: Try flipping label side to resolve overlaps
     for (let k = 1; k < sorted.length; k++) {
-      const i = sorted[k], prev = sorted[k - 1];
-      const iy = ry[i] + labelOffsetY[i];
-      const py = ry[prev] + labelOffsetY[prev];
-      // Only nudge if labels are on the same side and close vertically
-      if (labelSide[i] === labelSide[prev] && Math.abs(iy - py) < LABEL_H) {
-        labelOffsetY[i] += LABEL_H - (iy - py);
+      const i = sorted[k];
+      for (let m = k - 1; m >= 0 && m >= k - 4; m--) {
+        const prev = sorted[m];
+        if (Math.abs(ry[i] - ry[prev]) > LABEL_H * 3) break;
+        if (overlaps(i, prev)) {
+          // Try flipping i
+          labelFlip[i] = 1;
+          if (!overlaps(i, prev)) break; // fixed
+          labelFlip[i] = 0;
+          // Try flipping prev
+          labelFlip[prev] = 1;
+          if (!overlaps(i, prev)) break;
+          labelFlip[prev] = 0;
+        }
       }
+    }
+
+    // Pass 2: Vertical nudging for remaining overlaps (multiple passes)
+    for (let pass = 0; pass < 8; pass++) {
+      let anyOverlap = false;
+      for (let k = 1; k < sorted.length; k++) {
+        const i = sorted[k];
+        for (let m = k - 1; m >= 0 && m >= k - 4; m--) {
+          const prev = sorted[m];
+          if (ry[prev] + labelOffsetY[prev] < ry[i] + labelOffsetY[i] - LABEL_H * 3) break;
+          if (overlaps(i, prev)) {
+            const bi = labelBox(i), bp = labelBox(prev);
+            const overlapY = bp[3] - bi[1];
+            if (overlapY > 0) {
+              const push = overlapY * 0.5 + 0.5;
+              labelOffsetY[i] += push;
+              labelOffsetY[prev] -= push;
+              anyOverlap = true;
+            }
+          }
+        }
+      }
+      if (!anyOverlap) break;
     }
   }
 
@@ -835,65 +1001,92 @@ function renderSkillsForce(data) {
 
   function isDark() { return document.documentElement.dataset.theme === 'dark'; }
   function colors() { return isDark() ? groupColors.dark : groupColors.light; }
-
-  // Easing function for entry animation
   function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
-  function tick(now) {
-    if (!entryStart) entryStart = now;
-    const entryT = Math.min(1, (now - entryStart) / ENTRY_DURATION);
-    const entryEased = easeOutCubic(entryT);
+  // ── Cache settled positions ────────────────────────────────
+  function cachePositions() {
+    try {
+      const pos = [];
+      for (let i = 0; i < N; i++) pos.push([sx[i], sy[i]]);
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(pos));
+    } catch (_) {}
+  }
 
+  // ── Main render loop ───────────────────────────────────────
+  function tick(now) {
+    if (!isVisible) { rafId = 0; return; }
+    rafId = requestAnimationFrame(tick);
+
+    if (!entryStart) entryStart = now;
+
+    // Simulate physics
     if (!settled) {
       const v = simulate();
       computeHome();
-      if (v < 0.05) { settledFrames++; if (settledFrames > 60) settled = true; }
-      else settledFrames = 0;
+      if (v < 0.05) {
+        settledFrames++;
+        if (settledFrames > 60) { settled = true; cachePositions(); }
+      } else settledFrames = 0;
+    }
+    // If dragging, keep simulating so other nodes react
+    if (dragIdx >= 0 && settled) {
+      simulate();
+      computeHome();
     }
 
-    // Float + entry animation (nodes fly from center)
+    // Float + entry animation with per-group stagger (8)
     const ox = cw / 2, oy = ch / 2;
     for (let i = 0; i < N; i++) {
+      const groupDelay = nodeGroup[i] * GROUP_STAGGER;
+      const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
+      const entryEased = easeOutCubic(nodeEntryT);
+
       const p = floatPhase[i] + now * FLOAT_SPEED;
       const targetX = hx[i] + Math.sin(p) * floatAmpX[i];
       const targetY = hy[i] + Math.cos(p * 0.7) * floatAmpY[i];
-      // 6. Entry: lerp from center to target
       rx[i] = ox + (targetX - ox) * entryEased;
       ry[i] = oy + (targetY - oy) * entryEased;
     }
 
-    // Resolve label collisions
     resolveLabels();
 
-    // Smooth hover transitions
+    // ── Hover transitions ────────────────────────────────────
     const LERP = 0.1;
+    const activeIdx = effectiveHover();
     for (let i = 0; i < N; i++) {
-      const isHover = i === hoverIdx;
-      const isNeighbor = hoverIdx >= 0 && adj[hoverIdx].has(i);
-      const isSameGroup = hoverIdx >= 0 && nodes[i].group === nodes[hoverIdx].group;
-      const dimmed = hoverIdx >= 0 && !isHover && !isNeighbor && !isSameGroup;
+      const isHover = i === activeIdx;
+      const isNeighbor = activeIdx >= 0 && adj[activeIdx].has(i);
+      const isSameGroup = activeIdx >= 0 && nodes[i].group === nodes[activeIdx].group;
+      const dimmed = activeIdx >= 0 && !isHover && !isNeighbor && !isSameGroup;
 
-      nodeScaleAnim[i] += ((isHover ? 2.2 : (isNeighbor ? 1.3 : 1.0)) - nodeScaleAnim[i]) * LERP;
+      // 6. Hover ring instead of scale-up
+      const targetRingR = isHover ? DOT_R * dotScale[i] + 8 : 0;
+      const targetRingA = isHover ? 0.35 : 0;
+      ringR[i] += (targetRingR - ringR[i]) * LERP;
+      ringAlpha[i] += (targetRingA - ringAlpha[i]) * LERP;
+
+      nodeScaleAnim[i] += ((isNeighbor ? 1.3 : 1.0) - nodeScaleAnim[i]) * LERP;
       nodeAlpha[i] += ((dimmed ? 0.08 : 1.0) - nodeAlpha[i]) * LERP;
-      glowR[i] += (((isHover ? DOT_R * 5 : 0)) - glowR[i]) * LERP;
     }
     for (let e = 0; e < allEdges.length; e++) {
       const [a, b] = allEdges[e];
-      const connected = hoverIdx >= 0 && (a === hoverIdx || b === hoverIdx);
+      const connected = activeIdx >= 0 && (a === activeIdx || b === activeIdx);
       edgeTension[e] += ((connected ? 1 : 0) - edgeTension[e]) * LERP;
     }
 
-    // ── Draw ────────────────────────────────────────────────
+    // ── Draw ─────────────────────────────────────────────────
     ctx.clearRect(0, 0, cw, ch);
     const cols = colors();
     const dark = isDark();
     if (!fontFamily) fontFamily = getComputedStyle(document.body).fontFamily;
 
-    // 2. Group halos — soft blurred blob behind each cluster
-    if (entryT > 0.3) {
-      const haloAlpha = Math.min(1, (entryT - 0.3) / 0.5) * (dark ? 0.06 : 0.045);
+    // Overall entry progress (for halos)
+    const globalEntryT = Math.min(1, (now - entryStart) / (ENTRY_DURATION + groups.length * GROUP_STAGGER));
+
+    // Group halos
+    if (globalEntryT > 0.3) {
+      const haloAlpha = Math.min(1, (globalEntryT - 0.3) / 0.5) * (dark ? 0.06 : 0.045);
       for (let gi = 0; gi < groups.length; gi++) {
-        // Compute group centroid and radius
         let gx = 0, gy = 0, count = 0;
         for (let i = 0; i < N; i++) {
           if (nodes[i].group === gi) { gx += rx[i]; gy += ry[i]; count++; }
@@ -920,11 +1113,27 @@ function renderSkillsForce(data) {
       ctx.globalAlpha = 1;
     }
 
-    // Edges
+    // 7. Vignette — fade edges near canvas border
+    const vignetteSize = isMobile ? 30 : 50;
+    const vigGradT = ctx.createLinearGradient(0, 0, 0, vignetteSize);
+    const vigGradB = ctx.createLinearGradient(0, ch - vignetteSize, 0, ch);
+    const vigColor = dark ? 'rgba(28,28,30,' : 'rgba(245,245,247,';
+    vigGradT.addColorStop(0, vigColor + '1)'); vigGradT.addColorStop(1, vigColor + '0)');
+    vigGradB.addColorStop(0, vigColor + '0)'); vigGradB.addColorStop(1, vigColor + '1)');
+    ctx.fillStyle = vigGradT; ctx.fillRect(0, 0, cw, vignetteSize);
+    ctx.fillStyle = vigGradB; ctx.fillRect(0, ch - vignetteSize, cw, vignetteSize);
+    const vigGradL = ctx.createLinearGradient(0, 0, vignetteSize, 0);
+    const vigGradR = ctx.createLinearGradient(cw - vignetteSize, 0, cw, 0);
+    vigGradL.addColorStop(0, vigColor + '1)'); vigGradL.addColorStop(1, vigColor + '0)');
+    vigGradR.addColorStop(0, vigColor + '0)'); vigGradR.addColorStop(1, vigColor + '1)');
+    ctx.fillStyle = vigGradL; ctx.fillRect(0, 0, vignetteSize, ch);
+    ctx.fillStyle = vigGradR; ctx.fillRect(cw - vignetteSize, 0, vignetteSize, ch);
+
+    // Edges — 4. gradient coloring for cross-group, 5. dashed for cross-group
     for (let e = 0; e < allEdges.length; e++) {
       const [a, b] = allEdges[e];
       const ax = rx[a], ay = ry[a], bx = rx[b], by = ry[b];
-      const same = nodes[a].group === nodes[b].group;
+      const same = edgeSame[e];
       const mx = (ax + bx) / 2, my = (ay + by) / 2;
       const dx = bx - ax, dy = by - ay;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -936,36 +1145,57 @@ function renderSkillsForce(data) {
       ctx.moveTo(ax, ay);
       ctx.quadraticCurveTo(cpx, cpy, bx, by);
 
+      // 5. Cross-group edges are dashed
+      if (!same) ctx.setLineDash([3, 4]);
+      else ctx.setLineDash([]);
+
       const t = edgeTension[e];
       if (t > 0.05) {
-        ctx.strokeStyle = cols[nodes[a].group];
+        // 4. Edge gradient: source color → target color
+        if (!same && t > 0.1) {
+          const grad = ctx.createLinearGradient(ax, ay, bx, by);
+          grad.addColorStop(0, cols[nodes[a].group]);
+          grad.addColorStop(1, cols[nodes[b].group]);
+          ctx.strokeStyle = grad;
+        } else {
+          ctx.strokeStyle = cols[nodes[a].group];
+        }
         ctx.lineWidth = 1 + t * 0.4;
         ctx.globalAlpha = 0.06 + t * 0.14;
       } else {
-        const dimmed = hoverIdx >= 0;
-        const baseAlpha = same ? 0.06 : 0.04;
+        const dimmed = activeIdx >= 0;
+        const baseAlpha = isMobile ? (same ? 0.03 : 0.02) : (same ? 0.06 : 0.04);
         ctx.strokeStyle = dark ? `rgba(255,255,255,${baseAlpha})` : `rgba(0,0,0,${baseAlpha})`;
-        ctx.lineWidth = same ? 0.8 : 0.6;
+        ctx.lineWidth = isMobile ? (same ? 0.5 : 0.3) : (same ? 0.8 : 0.6);
         ctx.globalAlpha = dimmed ? 0.3 : 1;
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    ctx.setLineDash([]);
 
     // Nodes
     for (let i = 0; i < N; i++) {
       const x = rx[i], y = ry[i];
       const col = cols[nodes[i].group];
-      const scale = nodeScaleAnim[i] * dotScale[i]; // 8. connectivity scaling
-      const alpha = nodeAlpha[i] * entryEased;
+      const scale = nodeScaleAnim[i] * dotScale[i];
+      const groupDelay = nodeGroup[i] * GROUP_STAGGER;
+      const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
+      const alpha = nodeAlpha[i] * easeOutCubic(nodeEntryT);
 
-      // Glow ring
-      if (glowR[i] > 0.5) {
+      // 6. Hover ring (expanding concentric ring)
+      if (ringR[i] > 0.5) {
         ctx.beginPath();
-        ctx.arc(x, y, glowR[i], 0, Math.PI * 2);
+        ctx.arc(x, y, ringR[i], 0, Math.PI * 2);
         ctx.strokeStyle = col;
         ctx.lineWidth = 1.5;
-        ctx.globalAlpha = Math.min(0.15, (glowR[i] / (DOT_R * 5)) * 0.15);
+        ctx.globalAlpha = ringAlpha[i];
+        ctx.stroke();
+        // Second outer ring
+        ctx.beginPath();
+        ctx.arc(x, y, ringR[i] + 5, 0, Math.PI * 2);
+        ctx.lineWidth = 0.8;
+        ctx.globalAlpha = ringAlpha[i] * 0.4;
         ctx.stroke();
       }
 
@@ -976,28 +1206,28 @@ function renderSkillsForce(data) {
       ctx.fillStyle = col;
       ctx.fill();
 
-      // Label with collision offset
-      const isHover = nodeScaleAnim[i] > 1.5;
+      // Label
+      const isActive = i === activeIdx;
       const side = labelSide[i];
       ctx.textAlign = side > 0 ? 'left' : 'right';
       ctx.textBaseline = 'middle';
-      ctx.font = `${isHover ? '600' : '400'} ${isHover ? 12 : 10.5}px ${fontFamily}`;
-      ctx.fillStyle = isHover ? col : (dark ? '#d1d1d6' : '#48484a');
-      const labelX = x + side * (DOT_R * scale + 7);
+      const labelSize = isMobile ? (isActive ? 10.5 : 9) : (isActive ? 12 : 10.5);
+      ctx.font = `${isActive ? '600' : '400'} ${labelSize}px ${fontFamily}`;
+      ctx.fillStyle = isActive ? col : (dark ? '#d1d1d6' : '#48484a');
+      const labelX = x + side * (DOT_R * scale + (isMobile ? 5 : 7));
       const labelY = y + labelOffsetY[i];
       ctx.fillText(nodes[i].name, labelX, labelY);
 
-      if (isHover) {
+      if (isActive) {
         ctx.font = `400 9px ${fontFamily}`;
         ctx.fillStyle = dark ? '#8e8e93' : '#86868b';
         ctx.fillText(nodes[i].groupName, labelX, labelY + 14);
       }
       ctx.globalAlpha = 1;
     }
-
-    requestAnimationFrame(tick);
   }
 
+  // ── Hit testing ────────────────────────────────────────────
   function hitTest(ex, ey) {
     const rect = canvas.getBoundingClientRect();
     const mx = ex - rect.left, my = ey - rect.top;
@@ -1010,17 +1240,116 @@ function renderSkillsForce(data) {
     return best;
   }
 
+  // ── Mouse events ───────────────────────────────────────────
   canvas.addEventListener('mousemove', e => {
+    if (dragIdx >= 0) {
+      // 9. Drag: update sim position directly
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left - cw / 2;
+      const my = e.clientY - rect.top - ch / 2;
+      sx[dragIdx] = mx; sy[dragIdx] = my;
+      svx[dragIdx] = 0; svy[dragIdx] = 0;
+      settled = false; settledFrames = 0;
+      computeHome();
+      return;
+    }
     const idx = hitTest(e.clientX, e.clientY);
     if (idx !== hoverIdx) { hoverIdx = idx; canvas.style.cursor = idx >= 0 ? 'pointer' : 'default'; }
   });
-  canvas.addEventListener('mouseleave', () => { hoverIdx = -1; canvas.style.cursor = 'default'; });
+
+  canvas.addEventListener('mousedown', e => {
+    const idx = hitTest(e.clientX, e.clientY);
+    if (idx >= 0) {
+      dragIdx = idx;
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    }
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    if (dragIdx >= 0) {
+      dragIdx = -1;
+      canvas.style.cursor = hoverIdx >= 0 ? 'pointer' : 'default';
+    }
+  });
+
+  // 10. Click-to-lock: toggle locked highlight on click (only if not dragged)
+  let mouseDownPos = null;
+  canvas.addEventListener('mousedown', e => { mouseDownPos = { x: e.clientX, y: e.clientY }; });
+  canvas.addEventListener('click', e => {
+    // Ignore if mouse moved (was a drag)
+    if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5) return;
+    const idx = hitTest(e.clientX, e.clientY);
+    if (idx >= 0) {
+      lockedIdx = lockedIdx === idx ? -1 : idx;
+    } else {
+      lockedIdx = -1;
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoverIdx = -1;
+    if (dragIdx >= 0) dragIdx = -1;
+    canvas.style.cursor = 'default';
+  });
+
+  // 3. Touch support for mobile
+  canvas.addEventListener('touchstart', e => {
+    const touch = e.touches[0];
+    const idx = hitTest(touch.clientX, touch.clientY);
+    if (idx >= 0) {
+      dragIdx = idx;
+      hoverIdx = idx;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    if (dragIdx >= 0) {
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      sx[dragIdx] = touch.clientX - rect.left - cw / 2;
+      sy[dragIdx] = touch.clientY - rect.top - ch / 2;
+      svx[dragIdx] = 0; svy[dragIdx] = 0;
+      settled = false; settledFrames = 0;
+      computeHome();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', e => {
+    if (dragIdx >= 0) {
+      const touch = e.changedTouches[0];
+      const idx = hitTest(touch.clientX, touch.clientY);
+      // If released on same node, toggle lock
+      if (idx === dragIdx) {
+        lockedIdx = lockedIdx === idx ? -1 : idx;
+      }
+      dragIdx = -1;
+    } else {
+      // Simple tap
+      const touch = e.changedTouches[0];
+      const idx = hitTest(touch.clientX, touch.clientY);
+      if (idx >= 0) lockedIdx = lockedIdx === idx ? -1 : idx;
+      else lockedIdx = -1;
+      hoverIdx = lockedIdx;
+    }
+  });
+
+  // 1. Pause rAF when off-screen
+  const visObs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      isVisible = entry.isIntersecting;
+      if (isVisible && !rafId) rafId = requestAnimationFrame(tick);
+    });
+  }, { threshold: 0.05 });
+  visObs.observe(wrap);
 
   const resizeObs = new ResizeObserver(() => { resize(); settled = false; settledFrames = 0; });
   resizeObs.observe(wrap);
 
   resize();
-  requestAnimationFrame(tick);
+  rafId = requestAnimationFrame(tick);
 }
 
 // ── Explainer card ─────────────────────────────────────────
