@@ -170,6 +170,7 @@ function renderHeader(data) {
   if (data.cvLink) {
     const cv = document.createElement('a');
     cv.href = data.cvLink;
+    cv.download = '';
     cv.target = '_blank';
     cv.rel = 'noopener noreferrer';
     cv.className = 'cv-download-btn';
