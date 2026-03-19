@@ -1220,28 +1220,12 @@ html[data-theme="dark"] .pub-modal-img-wrap {
 }
 
 /* ── Reduced motion ──────────────────────────────────────── */
-/* ── Scroll reveal ────────────────────────────────────────── */
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 @media (prefers-reduced-motion: reduce) {
 
   *,
   *::before,
   *::after {
     transition: none !important;
-  }
-
-  .reveal {
-    opacity: 1 !important;
-    transform: none !important;
   }
 }
 
@@ -1365,7 +1349,11 @@ html[data-theme="dark"] #icon-moon {
     align-self: center;
     width: 72px !important;
     height: 72px !important;
+    min-width: 72px;
+    max-width: 72px;
+    object-fit: cover;
     border-radius: 10px !important;
+    display: block !important;
   }
 
   #header-name {

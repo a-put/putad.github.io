@@ -12,33 +12,7 @@ fetch('data.json')
     renderMedia(data);
     setupContact(data);
     document.getElementById('footer-name').textContent = `© ${new Date().getFullYear()} ${data.name}`;
-    initScrollReveal();
   });
-
-// ── Scroll reveal ─────────────────────────────────────────────
-function initScrollReveal() {
-  // Mark direct children of each section (cards, lists, paragraphs) for reveal
-  document.querySelectorAll('.tab-section').forEach(section => {
-    let delay = 0;
-    for (const child of section.children) {
-      if (child.tagName === 'H2') continue; // section titles stay visible
-      child.classList.add('reveal');
-      child.style.transitionDelay = delay + 'ms';
-      delay += 80; // stagger each child by 80ms
-    }
-  });
-
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        observer.unobserve(entry.target); // animate once only
-      }
-    });
-  }, { threshold: 0.15 });
-
-  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-}
 
 // ── Tab switching / mobile scroll-spy ─────────────────────────
 const mobileQuery = window.matchMedia('(max-width: 768px)');
