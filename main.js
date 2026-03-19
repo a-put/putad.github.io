@@ -1012,7 +1012,6 @@ function renderSkillsForce(data) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     computeHome();
     labelsMeasured = false; // re-measure on next frame
-    cachedVigDark = null;   // invalidate vignette gradients
   }
 
   function isDark() { return document.documentElement.dataset.theme === 'dark'; }
@@ -1031,8 +1030,6 @@ function renderSkillsForce(data) {
   // ── Performance state ───────────────────────────────────────
   let frameCount = 0;
   let lastActiveIdx = -1;
-  let cachedVigDark = null; // vignette gradient cache
-  let cachedVig = null;
 
   // Edge ripple — single wave on first settle
   let rippleStart = 0;       // timestamp when ripple begins (0 = not started)
@@ -1052,7 +1049,8 @@ function renderSkillsForce(data) {
     frameCount++;
 
     // Queue ripple on first frame if already settled (cached positions)
-    if (!rippleFired && !rippleQueued && !rippleStart && settled && entryDone && frameCount > 1) {
+    // Guard cw/ch > 0: canvas may be in a hidden tab with zero dimensions
+    if (!rippleFired && !rippleQueued && !rippleStart && settled && entryDone && frameCount > 1 && cw > 0 && ch > 0) {
       rippleQueued = now;
       rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
     }
@@ -1075,7 +1073,7 @@ function renderSkillsForce(data) {
         if (settledFrames > 60) {
           settled = true; cachePositions();
           // Queue ripple on first settle (will start after delay + entry done)
-          if (!rippleFired && !rippleQueued) {
+          if (!rippleFired && !rippleQueued && cw > 0 && ch > 0) {
             rippleQueued = now;
             rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
           }
@@ -1143,10 +1141,14 @@ function renderSkillsForce(data) {
     }
 
     // ── Draw ─────────────────────────────────────────────────
-    ctx.clearRect(0, 0, cw, ch);
     const cols = colors();
     const dark = isDark();
     if (!fontFamily) fontFamily = getComputedStyle(document.body).fontFamily;
+
+    // Fill canvas with body's transitioning bg color (no transparent flash on theme toggle)
+    const bgRaw = getComputedStyle(document.body).backgroundColor;
+    ctx.fillStyle = bgRaw;
+    ctx.fillRect(0, 0, cw, ch);
 
     // Overall entry progress (for halos)
     const globalEntryT = Math.min(1, (now - entryStart) / (ENTRY_DURATION + groups.length * GROUP_STAGGER));
@@ -1180,24 +1182,26 @@ function renderSkillsForce(data) {
       ctx.globalAlpha = 1;
     }
 
-    // 7. Vignette — fade edges near canvas border (cached gradients)
-    if (cachedVigDark !== dark) {
-      cachedVigDark = dark;
-      const vs = isMobile ? 30 : 50;
-      const vc = dark ? 'rgba(28,28,30,' : 'rgba(245,245,247,';
-      cachedVig = {
-        vs,
-        t: (() => { const g = ctx.createLinearGradient(0, 0, 0, vs); g.addColorStop(0, vc + '1)'); g.addColorStop(1, vc + '0)'); return g; })(),
-        b: (() => { const g = ctx.createLinearGradient(0, ch - vs, 0, ch); g.addColorStop(0, vc + '0)'); g.addColorStop(1, vc + '1)'); return g; })(),
-        l: (() => { const g = ctx.createLinearGradient(0, 0, vs, 0); g.addColorStop(0, vc + '1)'); g.addColorStop(1, vc + '0)'); return g; })(),
-        r: (() => { const g = ctx.createLinearGradient(cw - vs, 0, cw, 0); g.addColorStop(0, vc + '0)'); g.addColorStop(1, vc + '1)'); return g; })(),
-      };
-    }
-    const vs = cachedVig.vs;
-    ctx.fillStyle = cachedVig.t; ctx.fillRect(0, 0, cw, vs);
-    ctx.fillStyle = cachedVig.b; ctx.fillRect(0, ch - vs, cw, vs);
-    ctx.fillStyle = cachedVig.l; ctx.fillRect(0, 0, vs, ch);
-    ctx.fillStyle = cachedVig.r; ctx.fillRect(cw - vs, 0, vs, ch);
+    // 7. Vignette — fade edges near canvas border (reuses bgRaw from canvas fill)
+    const rgbM = bgRaw.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    const bgR = rgbM ? +rgbM[1] : (dark ? 28 : 245);
+    const bgG = rgbM ? +rgbM[2] : (dark ? 28 : 245);
+    const bgB = rgbM ? +rgbM[3] : (dark ? 30 : 247);
+    const bgSolid = `rgba(${bgR},${bgG},${bgB},1)`;
+    const bgClear = `rgba(${bgR},${bgG},${bgB},0)`;
+    const vigSize = isMobile ? 30 : 50;
+    const vigT = ctx.createLinearGradient(0, 0, 0, vigSize);
+    vigT.addColorStop(0, bgSolid); vigT.addColorStop(1, bgClear);
+    const vigB = ctx.createLinearGradient(0, ch - vigSize, 0, ch);
+    vigB.addColorStop(0, bgClear); vigB.addColorStop(1, bgSolid);
+    const vigL = ctx.createLinearGradient(0, 0, vigSize, 0);
+    vigL.addColorStop(0, bgSolid); vigL.addColorStop(1, bgClear);
+    const vigR = ctx.createLinearGradient(cw - vigSize, 0, cw, 0);
+    vigR.addColorStop(0, bgClear); vigR.addColorStop(1, bgSolid);
+    ctx.fillStyle = vigT; ctx.fillRect(0, 0, cw, vigSize);
+    ctx.fillStyle = vigB; ctx.fillRect(0, ch - vigSize, cw, vigSize);
+    ctx.fillStyle = vigL; ctx.fillRect(0, 0, vigSize, ch);
+    ctx.fillStyle = vigR; ctx.fillRect(cw - vigSize, 0, vigSize, ch);
 
     // Edge ripple progress
     let rippleR = 0, rippleActive = false;
@@ -1237,7 +1241,7 @@ function renderSkillsForce(data) {
         if (distFromWave < RIPPLE_WIDTH) {
           // Smooth bell curve: brightest at wavefront, fades at edges
           const t01 = 1 - distFromWave / RIPPLE_WIDTH;
-          rippleBoost = t01 * t01 * 0.15;
+          rippleBoost = t01 * t01 * 0.25;
         }
       }
 
@@ -1298,7 +1302,7 @@ function renderSkillsForce(data) {
         const distFromWave = Math.abs(nodeDist - rippleR);
         if (distFromWave < RIPPLE_WIDTH) {
           const t01 = 1 - distFromWave / RIPPLE_WIDTH;
-          const glowAlpha = t01 * t01 * 0.06;
+          const glowAlpha = t01 * t01 * 0.12;
           ctx.beginPath();
           ctx.arc(x, y, DOT_R * scale + 6, 0, Math.PI * 2);
           ctx.fillStyle = col;
