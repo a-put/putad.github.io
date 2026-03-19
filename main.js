@@ -897,10 +897,9 @@ function renderSkillsForce(data) {
   }
 
   // ── Label collision avoidance ──────────────────────────────
-  // Measures actual label bounding boxes, checks AABB overlap,
-  // nudges vertically, and flips label side when that resolves better.
-  const labelW = new Float32Array(N);  // cached text widths
-  const labelFlip = new Int8Array(N);  // 0 = use labelSide, 1 = flipped
+  const labelW = new Float32Array(N);
+  const labelFlip = new Int8Array(N);
+  let labelsMeasured = false;
 
   function measureLabels() {
     if (!fontFamily) return;
@@ -909,20 +908,20 @@ function renderSkillsForce(data) {
     for (let i = 0; i < N; i++) {
       labelW[i] = ctx.measureText(nodes[i].name).width;
     }
+    labelsMeasured = true;
   }
 
   function resolveLabels() {
     const LABEL_H = isMobile ? 12 : 15;
-    const PAD_X = 6; // horizontal padding around label
+    const PAD_X = 6;
     for (let i = 0; i < N; i++) { labelOffsetY[i] = 0; labelFlip[i] = 0; }
 
-    // Compute label bounding boxes: [left, top, right, bottom]
     function labelBox(i) {
       const side = labelFlip[i] ? -labelSide[i] : labelSide[i];
       const dotR = DOT_R * (nodeScaleAnim[i] * dotScale[i]);
       const gap = isMobile ? 5 : 7;
       const anchorX = rx[i] + side * (dotR + gap);
-      const w = labelW[i] || 60; // fallback before first measure
+      const w = labelsMeasured ? labelW[i] : 60;
       const y = ry[i] + labelOffsetY[i];
       const left = side > 0 ? anchorX - PAD_X : anchorX - w - PAD_X;
       const right = side > 0 ? anchorX + w + PAD_X : anchorX + PAD_X;
@@ -934,8 +933,21 @@ function renderSkillsForce(data) {
       return ba[0] < bb[2] && ba[2] > bb[0] && ba[1] < bb[3] && ba[3] > bb[1];
     }
 
-    // Sort by Y for efficient neighbor checks
+    // Check if flipping node i creates any new overlaps with its nearby neighbors
+    function flipCausesNewOverlap(i, sorted, kIdx) {
+      const range = 4;
+      for (let m = Math.max(0, kIdx - range); m < Math.min(sorted.length, kIdx + range + 1); m++) {
+        const j = sorted[m];
+        if (j === i) continue;
+        if (overlaps(i, j)) return true;
+      }
+      return false;
+    }
+
     const sorted = Array.from({ length: N }, (_, i) => i).sort((a, b) => ry[a] - ry[b]);
+    // Build reverse index: node → position in sorted array
+    const sortedPos = new Uint8Array(N);
+    for (let k = 0; k < sorted.length; k++) sortedPos[sorted[k]] = k;
 
     // Pass 1: Try flipping label side to resolve overlaps
     for (let k = 1; k < sorted.length; k++) {
@@ -944,19 +956,19 @@ function renderSkillsForce(data) {
         const prev = sorted[m];
         if (Math.abs(ry[i] - ry[prev]) > LABEL_H * 3) break;
         if (overlaps(i, prev)) {
-          // Try flipping i
+          // Try flipping i — only accept if it doesn't create new overlaps
           labelFlip[i] = 1;
-          if (!overlaps(i, prev)) break; // fixed
+          if (!flipCausesNewOverlap(i, sorted, k)) break;
           labelFlip[i] = 0;
           // Try flipping prev
           labelFlip[prev] = 1;
-          if (!overlaps(i, prev)) break;
+          if (!flipCausesNewOverlap(prev, sorted, m)) break;
           labelFlip[prev] = 0;
         }
       }
     }
 
-    // Pass 2: Vertical nudging for remaining overlaps (multiple passes)
+    // Pass 2: Vertical nudging for remaining overlaps
     for (let pass = 0; pass < 8; pass++) {
       let anyOverlap = false;
       for (let k = 1; k < sorted.length; k++) {
@@ -997,6 +1009,7 @@ function renderSkillsForce(data) {
     canvas.height = ch * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     computeHome();
+    labelsMeasured = false; // re-measure on next frame
   }
 
   function isDark() { return document.documentElement.dataset.theme === 'dark'; }
@@ -1048,6 +1061,8 @@ function renderSkillsForce(data) {
       ry[i] = oy + (targetY - oy) * entryEased;
     }
 
+    // Measure label widths once font is available, then resolve collisions
+    if (fontFamily && !labelsMeasured) measureLabels();
     resolveLabels();
 
     // ── Hover transitions ────────────────────────────────────
@@ -1206,9 +1221,9 @@ function renderSkillsForce(data) {
       ctx.fillStyle = col;
       ctx.fill();
 
-      // Label
+      // Label — use flipped side if collision resolver decided to flip
       const isActive = i === activeIdx;
-      const side = labelSide[i];
+      const side = labelFlip[i] ? -labelSide[i] : labelSide[i];
       ctx.textAlign = side > 0 ? 'left' : 'right';
       ctx.textBaseline = 'middle';
       const labelSize = isMobile ? (isActive ? 10.5 : 9) : (isActive ? 12 : 10.5);
@@ -1241,13 +1256,13 @@ function renderSkillsForce(data) {
   }
 
   // ── Mouse events ───────────────────────────────────────────
+  let mouseDownPos = null;
+
   canvas.addEventListener('mousemove', e => {
     if (dragIdx >= 0) {
-      // 9. Drag: update sim position directly
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left - cw / 2;
-      const my = e.clientY - rect.top - ch / 2;
-      sx[dragIdx] = mx; sy[dragIdx] = my;
+      sx[dragIdx] = e.clientX - rect.left - cw / 2;
+      sy[dragIdx] = e.clientY - rect.top - ch / 2;
       svx[dragIdx] = 0; svy[dragIdx] = 0;
       settled = false; settledFrames = 0;
       computeHome();
@@ -1258,6 +1273,7 @@ function renderSkillsForce(data) {
   });
 
   canvas.addEventListener('mousedown', e => {
+    mouseDownPos = { x: e.clientX, y: e.clientY };
     const idx = hitTest(e.clientX, e.clientY);
     if (idx >= 0) {
       dragIdx = idx;
@@ -1266,16 +1282,19 @@ function renderSkillsForce(data) {
     }
   });
 
-  canvas.addEventListener('mouseup', () => {
+  // Listen on window so releasing outside canvas still ends the drag
+  window.addEventListener('mouseup', e => {
     if (dragIdx >= 0) {
+      // Check if it was a click (not a drag) to toggle lock
+      if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) <= 5) {
+        lockedIdx = lockedIdx === dragIdx ? -1 : dragIdx;
+      }
       dragIdx = -1;
       canvas.style.cursor = hoverIdx >= 0 ? 'pointer' : 'default';
     }
+    mouseDownPos = null;
   });
 
-  // 10. Click-to-lock: toggle locked highlight on click (only if not dragged)
-  let mouseDownPos = null;
-  canvas.addEventListener('mousedown', e => { mouseDownPos = { x: e.clientX, y: e.clientY }; });
   canvas.addEventListener('click', e => {
     // Ignore if mouse moved (was a drag)
     if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5) return;
@@ -1289,13 +1308,16 @@ function renderSkillsForce(data) {
 
   canvas.addEventListener('mouseleave', () => {
     hoverIdx = -1;
-    if (dragIdx >= 0) dragIdx = -1;
-    canvas.style.cursor = 'default';
+    // Don't clear dragIdx here — mouseup on window handles it
+    if (dragIdx < 0) canvas.style.cursor = 'default';
   });
 
-  // 3. Touch support for mobile
+  // ── Touch events ───────────────────────────────────────────
+  let touchStartPos = null;
+
   canvas.addEventListener('touchstart', e => {
     const touch = e.touches[0];
+    touchStartPos = { x: touch.clientX, y: touch.clientY };
     const idx = hitTest(touch.clientX, touch.clientY);
     if (idx >= 0) {
       dragIdx = idx;
@@ -1318,22 +1340,23 @@ function renderSkillsForce(data) {
   }, { passive: false });
 
   canvas.addEventListener('touchend', e => {
+    const touch = e.changedTouches[0];
+    const wasDrag = touchStartPos &&
+      Math.hypot(touch.clientX - touchStartPos.x, touch.clientY - touchStartPos.y) > 10;
     if (dragIdx >= 0) {
-      const touch = e.changedTouches[0];
-      const idx = hitTest(touch.clientX, touch.clientY);
-      // If released on same node, toggle lock
-      if (idx === dragIdx) {
-        lockedIdx = lockedIdx === idx ? -1 : idx;
+      // Only toggle lock if it was a tap, not a drag
+      if (!wasDrag) {
+        lockedIdx = lockedIdx === dragIdx ? -1 : dragIdx;
       }
       dragIdx = -1;
     } else {
-      // Simple tap
-      const touch = e.changedTouches[0];
+      // Simple tap on empty space
       const idx = hitTest(touch.clientX, touch.clientY);
       if (idx >= 0) lockedIdx = lockedIdx === idx ? -1 : idx;
       else lockedIdx = -1;
       hoverIdx = lockedIdx;
     }
+    touchStartPos = null;
   });
 
   // 1. Pause rAF when off-screen
