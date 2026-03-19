@@ -779,7 +779,6 @@ function renderSkillsForce(data) {
   let hoverIdx = -1;
   let lockedIdx = -1;           // 10. click-to-lock highlight
   let dragIdx = -1;             // 9. drag nodes
-  let dragOffX = 0, dragOffY = 0;
   let dpr = 1, cw = 0, ch = 0;
   let settled = false, settledFrames = 0;
   let isVisible = true;         // 1. pause when off-screen
@@ -798,6 +797,10 @@ function renderSkillsForce(data) {
   // Which group each node belongs to (for stagger delay)
   const nodeGroup = new Uint8Array(N);
   for (let i = 0; i < N; i++) nodeGroup[i] = nodes[i].group;
+
+  // 4. Pre-compute group membership arrays (avoid scanning all N per group)
+  const groupMembers = groups.map(() => []);
+  for (let i = 0; i < N; i++) groupMembers[nodeGroup[i]].push(i);
 
   // Try restoring cached positions (2. session cache)
   const CACHE_KEY = 'skills-force-pos';
@@ -1010,6 +1013,7 @@ function renderSkillsForce(data) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     computeHome();
     labelsMeasured = false; // re-measure on next frame
+    cachedVigDark = null;   // invalidate vignette gradients
   }
 
   function isDark() { return document.documentElement.dataset.theme === 'dark'; }
@@ -1025,12 +1029,24 @@ function renderSkillsForce(data) {
     } catch (_) {}
   }
 
+  // ── Performance state ───────────────────────────────────────
+  let frameCount = 0;
+  let lastActiveIdx = -1;
+  let entryDone = false;
+  let cachedVigDark = null; // vignette gradient cache
+  let cachedVig = null;
+
   // ── Main render loop ───────────────────────────────────────
   function tick(now) {
     if (!isVisible) { rafId = 0; return; }
     rafId = requestAnimationFrame(tick);
 
     if (!entryStart) entryStart = now;
+    frameCount++;
+
+    // 3. Reduce to ~30fps when idle (settled, no drag, no hover animation)
+    const isIdle = settled && dragIdx < 0 && effectiveHover() < 0 && entryDone;
+    if (isIdle && (frameCount & 1)) return; // skip odd frames when idle
 
     // Simulate physics
     if (!settled) {
@@ -1047,34 +1063,46 @@ function renderSkillsForce(data) {
       computeHome();
     }
 
-    // Float + entry animation with per-group stagger (8)
+    // Float + entry animation with per-group stagger
     const ox = cw / 2, oy = ch / 2;
-    for (let i = 0; i < N; i++) {
-      const groupDelay = nodeGroup[i] * GROUP_STAGGER;
-      const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
-      const entryEased = easeOutCubic(nodeEntryT);
+    const entryComplete = now - entryStart > ENTRY_DURATION + groups.length * GROUP_STAGGER;
+    if (entryComplete) entryDone = true;
 
+    for (let i = 0; i < N; i++) {
       const p = floatPhase[i] + now * FLOAT_SPEED;
       const targetX = hx[i] + Math.sin(p) * floatAmpX[i];
       const targetY = hy[i] + Math.cos(p * 0.7) * floatAmpY[i];
-      rx[i] = ox + (targetX - ox) * entryEased;
-      ry[i] = oy + (targetY - oy) * entryEased;
+      if (entryDone) {
+        // Skip easing math once entry is complete
+        rx[i] = targetX;
+        ry[i] = targetY;
+      } else {
+        const groupDelay = nodeGroup[i] * GROUP_STAGGER;
+        const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
+        const entryEased = easeOutCubic(nodeEntryT);
+        rx[i] = ox + (targetX - ox) * entryEased;
+        ry[i] = oy + (targetY - oy) * entryEased;
+      }
     }
 
-    // Measure label widths once font is available, then resolve collisions
+    // Measure label widths once font is available
     if (fontFamily && !labelsMeasured) measureLabels();
-    resolveLabels();
+
+    // 1+2. Throttle resolveLabels: every 3rd frame, and skip when truly idle
+    const activeIdx = effectiveHover();
+    const hoverChanged = activeIdx !== lastActiveIdx;
+    lastActiveIdx = activeIdx;
+    const needsLabelResolve = !settled || dragIdx >= 0 || hoverChanged || !entryDone || (frameCount % 3 === 0);
+    if (needsLabelResolve) resolveLabels();
 
     // ── Hover transitions ────────────────────────────────────
     const LERP = 0.1;
-    const activeIdx = effectiveHover();
     for (let i = 0; i < N; i++) {
       const isHover = i === activeIdx;
       const isNeighbor = activeIdx >= 0 && adj[activeIdx].has(i);
       const isSameGroup = activeIdx >= 0 && nodes[i].group === nodes[activeIdx].group;
       const dimmed = activeIdx >= 0 && !isHover && !isNeighbor && !isSameGroup;
 
-      // 6. Hover ring instead of scale-up
       const targetRingR = isHover ? DOT_R * dotScale[i] + 8 : 0;
       const targetRingA = isHover ? 0.35 : 0;
       ringR[i] += (targetRingR - ringR[i]) * LERP;
@@ -1098,22 +1126,21 @@ function renderSkillsForce(data) {
     // Overall entry progress (for halos)
     const globalEntryT = Math.min(1, (now - entryStart) / (ENTRY_DURATION + groups.length * GROUP_STAGGER));
 
-    // Group halos
+    // Group halos — uses pre-computed groupMembers[]
     if (globalEntryT > 0.3) {
       const haloAlpha = Math.min(1, (globalEntryT - 0.3) / 0.5) * (dark ? 0.06 : 0.045);
       for (let gi = 0; gi < groups.length; gi++) {
-        let gx = 0, gy = 0, count = 0;
-        for (let i = 0; i < N; i++) {
-          if (nodes[i].group === gi) { gx += rx[i]; gy += ry[i]; count++; }
+        const members = groupMembers[gi];
+        if (members.length === 0) continue;
+        let gx = 0, gy = 0;
+        for (let m = 0; m < members.length; m++) {
+          gx += rx[members[m]]; gy += ry[members[m]];
         }
-        if (count === 0) continue;
-        gx /= count; gy /= count;
+        gx /= members.length; gy /= members.length;
         let maxR = 0;
-        for (let i = 0; i < N; i++) {
-          if (nodes[i].group === gi) {
-            const d = Math.hypot(rx[i] - gx, ry[i] - gy);
-            if (d > maxR) maxR = d;
-          }
+        for (let m = 0; m < members.length; m++) {
+          const d = Math.hypot(rx[members[m]] - gx, ry[members[m]] - gy);
+          if (d > maxR) maxR = d;
         }
         const haloR = maxR + 40;
         const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, haloR);
@@ -1128,24 +1155,28 @@ function renderSkillsForce(data) {
       ctx.globalAlpha = 1;
     }
 
-    // 7. Vignette — fade edges near canvas border
-    const vignetteSize = isMobile ? 30 : 50;
-    const vigGradT = ctx.createLinearGradient(0, 0, 0, vignetteSize);
-    const vigGradB = ctx.createLinearGradient(0, ch - vignetteSize, 0, ch);
-    const vigColor = dark ? 'rgba(28,28,30,' : 'rgba(245,245,247,';
-    vigGradT.addColorStop(0, vigColor + '1)'); vigGradT.addColorStop(1, vigColor + '0)');
-    vigGradB.addColorStop(0, vigColor + '0)'); vigGradB.addColorStop(1, vigColor + '1)');
-    ctx.fillStyle = vigGradT; ctx.fillRect(0, 0, cw, vignetteSize);
-    ctx.fillStyle = vigGradB; ctx.fillRect(0, ch - vignetteSize, cw, vignetteSize);
-    const vigGradL = ctx.createLinearGradient(0, 0, vignetteSize, 0);
-    const vigGradR = ctx.createLinearGradient(cw - vignetteSize, 0, cw, 0);
-    vigGradL.addColorStop(0, vigColor + '1)'); vigGradL.addColorStop(1, vigColor + '0)');
-    vigGradR.addColorStop(0, vigColor + '0)'); vigGradR.addColorStop(1, vigColor + '1)');
-    ctx.fillStyle = vigGradL; ctx.fillRect(0, 0, vignetteSize, ch);
-    ctx.fillStyle = vigGradR; ctx.fillRect(cw - vignetteSize, 0, vignetteSize, ch);
+    // 7. Vignette — fade edges near canvas border (cached gradients)
+    if (cachedVigDark !== dark) {
+      cachedVigDark = dark;
+      const vs = isMobile ? 30 : 50;
+      const vc = dark ? 'rgba(28,28,30,' : 'rgba(245,245,247,';
+      cachedVig = {
+        vs,
+        t: (() => { const g = ctx.createLinearGradient(0, 0, 0, vs); g.addColorStop(0, vc + '1)'); g.addColorStop(1, vc + '0)'); return g; })(),
+        b: (() => { const g = ctx.createLinearGradient(0, ch - vs, 0, ch); g.addColorStop(0, vc + '0)'); g.addColorStop(1, vc + '1)'); return g; })(),
+        l: (() => { const g = ctx.createLinearGradient(0, 0, vs, 0); g.addColorStop(0, vc + '1)'); g.addColorStop(1, vc + '0)'); return g; })(),
+        r: (() => { const g = ctx.createLinearGradient(cw - vs, 0, cw, 0); g.addColorStop(0, vc + '0)'); g.addColorStop(1, vc + '1)'); return g; })(),
+      };
+    }
+    const vs = cachedVig.vs;
+    ctx.fillStyle = cachedVig.t; ctx.fillRect(0, 0, cw, vs);
+    ctx.fillStyle = cachedVig.b; ctx.fillRect(0, ch - vs, cw, vs);
+    ctx.fillStyle = cachedVig.l; ctx.fillRect(0, 0, vs, ch);
+    ctx.fillStyle = cachedVig.r; ctx.fillRect(cw - vs, 0, vs, ch);
 
-    // Edges — 4. gradient coloring for cross-group, 5. dashed for cross-group
-    for (let e = 0; e < allEdges.length; e++) {
+    // Edges — batched: solid (intra-group) first, then dashed (cross-group)
+    // to minimize setLineDash calls
+    function drawEdge(e) {
       const [a, b] = allEdges[e];
       const ax = rx[a], ay = ry[a], bx = rx[b], by = ry[b];
       const same = edgeSame[e];
@@ -1160,13 +1191,8 @@ function renderSkillsForce(data) {
       ctx.moveTo(ax, ay);
       ctx.quadraticCurveTo(cpx, cpy, bx, by);
 
-      // 5. Cross-group edges are dashed
-      if (!same) ctx.setLineDash([3, 4]);
-      else ctx.setLineDash([]);
-
       const t = edgeTension[e];
       if (t > 0.05) {
-        // 4. Edge gradient: source color → target color
         if (!same && t > 0.1) {
           const grad = ctx.createLinearGradient(ax, ay, bx, by);
           grad.addColorStop(0, cols[nodes[a].group]);
@@ -1187,6 +1213,12 @@ function renderSkillsForce(data) {
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    // Draw solid (intra-group) edges
+    ctx.setLineDash([]);
+    for (let e = 0; e < allEdges.length; e++) { if (edgeSame[e]) drawEdge(e); }
+    // Draw dashed (cross-group) edges
+    ctx.setLineDash([3, 4]);
+    for (let e = 0; e < allEdges.length; e++) { if (!edgeSame[e]) drawEdge(e); }
     ctx.setLineDash([]);
 
     // Nodes
@@ -1194,9 +1226,14 @@ function renderSkillsForce(data) {
       const x = rx[i], y = ry[i];
       const col = cols[nodes[i].group];
       const scale = nodeScaleAnim[i] * dotScale[i];
-      const groupDelay = nodeGroup[i] * GROUP_STAGGER;
-      const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
-      const alpha = nodeAlpha[i] * easeOutCubic(nodeEntryT);
+      let alpha;
+      if (entryDone) {
+        alpha = nodeAlpha[i];
+      } else {
+        const groupDelay = nodeGroup[i] * GROUP_STAGGER;
+        const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
+        alpha = nodeAlpha[i] * easeOutCubic(nodeEntryT);
+      }
 
       // 6. Hover ring (expanding concentric ring)
       if (ringR[i] > 0.5) {
@@ -1295,15 +1332,12 @@ function renderSkillsForce(data) {
     mouseDownPos = null;
   });
 
+  // Click on empty space to dismiss lock (mouseup handles node clicks)
   canvas.addEventListener('click', e => {
-    // Ignore if mouse moved (was a drag)
     if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5) return;
     const idx = hitTest(e.clientX, e.clientY);
-    if (idx >= 0) {
-      lockedIdx = lockedIdx === idx ? -1 : idx;
-    } else {
-      lockedIdx = -1;
-    }
+    // Only handle empty-space clicks here; node clicks handled in mouseup
+    if (idx < 0) lockedIdx = -1;
   });
 
   canvas.addEventListener('mouseleave', () => {
