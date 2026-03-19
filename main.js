@@ -783,6 +783,7 @@ function renderSkillsForce(data) {
   let settled = false, settledFrames = 0;
   let isVisible = true;         // 1. pause when off-screen
   let rafId = 0;
+  let entryDone = false;
 
   // Entry animation — staggered by group (8)
   let entryStart = 0;
@@ -813,6 +814,7 @@ function renderSkillsForce(data) {
         for (let i = 0; i < N; i++) { sx[i] = pos[i][0]; sy[i] = pos[i][1]; }
         settled = true;
         usedCache = true;
+        entryDone = true; // skip entry animation on cached load
       }
     }
   } catch (_) {}
@@ -872,12 +874,12 @@ function renderSkillsForce(data) {
         if (i !== dragIdx) { svx[j] -= (dx / dist) * f; svy[j] -= (dy / dist) * f; }
       }
     }
-    for (const [a, b] of allEdges) {
+    for (let e = 0; e < allEdges.length; e++) {
+      const [a, b] = allEdges[e];
       const dx = sx[b] - sx[a], dy = sy[b] - sy[a];
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const same = nodes[a].group === nodes[b].group;
-      const spring = same ? INTRA_SPRING : CROSS_SPRING;
-      const rest = same ? INTRA_REST : CROSS_REST;
+      const spring = edgeSame[e] ? INTRA_SPRING : CROSS_SPRING;
+      const rest = edgeSame[e] ? INTRA_REST : CROSS_REST;
       const f = (dist - rest) * spring;
       const fx = (dx / dist) * f, fy = (dy / dist) * f;
       if (a !== dragIdx) { svx[a] += fx; svy[a] += fy; }
@@ -948,9 +950,6 @@ function renderSkillsForce(data) {
     }
 
     const sorted = Array.from({ length: N }, (_, i) => i).sort((a, b) => ry[a] - ry[b]);
-    // Build reverse index: node → position in sorted array
-    const sortedPos = new Uint8Array(N);
-    for (let k = 0; k < sorted.length; k++) sortedPos[sorted[k]] = k;
 
     // Pass 1: Try flipping label side to resolve overlaps
     for (let k = 1; k < sorted.length; k++) {
@@ -1032,15 +1031,16 @@ function renderSkillsForce(data) {
   // ── Performance state ───────────────────────────────────────
   let frameCount = 0;
   let lastActiveIdx = -1;
-  let entryDone = false;
   let cachedVigDark = null; // vignette gradient cache
   let cachedVig = null;
 
   // Edge ripple — single wave on first settle
   let rippleStart = 0;       // timestamp when ripple begins (0 = not started)
+  let rippleQueued = 0;      // timestamp when ripple was requested (delay before start)
   let rippleFired = false;   // true after ripple has played
-  const RIPPLE_DURATION = 1500; // ms for full expansion
-  const RIPPLE_WIDTH = 80;     // px width of the bright band
+  const RIPPLE_DELAY = 400;    // ms delay after settle before ripple starts
+  const RIPPLE_DURATION = 1800; // ms for full expansion
+  const RIPPLE_WIDTH = 120;    // px width of the bright band
   let rippleMaxR = 0;          // max radius (computed on trigger)
 
   // ── Main render loop ───────────────────────────────────────
@@ -1051,14 +1051,19 @@ function renderSkillsForce(data) {
     if (!entryStart) entryStart = now;
     frameCount++;
 
-    // Trigger ripple on first frame if already settled (cached positions)
-    if (!rippleFired && !rippleStart && settled && frameCount > 1) {
-      rippleStart = now;
+    // Queue ripple on first frame if already settled (cached positions)
+    if (!rippleFired && !rippleQueued && !rippleStart && settled && entryDone && frameCount > 1) {
+      rippleQueued = now;
       rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
+    }
+    // Start ripple after delay AND entry animation is done
+    if (rippleQueued && !rippleStart && entryDone && now - rippleQueued >= RIPPLE_DELAY) {
+      rippleStart = now;
+      rippleQueued = 0;
     }
 
     // 3. Reduce to ~30fps when idle (settled, no drag, no hover, no ripple)
-    const isIdle = settled && dragIdx < 0 && effectiveHover() < 0 && entryDone && !rippleStart;
+    const isIdle = settled && dragIdx < 0 && effectiveHover() < 0 && entryDone && !rippleStart && !rippleQueued;
     if (isIdle && (frameCount & 1)) return; // skip odd frames when idle
 
     // Simulate physics
@@ -1069,9 +1074,9 @@ function renderSkillsForce(data) {
         settledFrames++;
         if (settledFrames > 60) {
           settled = true; cachePositions();
-          // Trigger ripple on first settle
-          if (!rippleFired) {
-            rippleStart = now;
+          // Queue ripple on first settle (will start after delay + entry done)
+          if (!rippleFired && !rippleQueued) {
+            rippleQueued = now;
             rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
           }
         }
@@ -1232,7 +1237,7 @@ function renderSkillsForce(data) {
         if (distFromWave < RIPPLE_WIDTH) {
           // Smooth bell curve: brightest at wavefront, fades at edges
           const t01 = 1 - distFromWave / RIPPLE_WIDTH;
-          rippleBoost = t01 * t01 * 0.35;
+          rippleBoost = t01 * t01 * 0.15;
         }
       }
 
@@ -1254,7 +1259,7 @@ function renderSkillsForce(data) {
         if (rippleBoost > 0) {
           // During ripple, use group color instead of gray
           ctx.strokeStyle = cols[nodes[a].group];
-          ctx.lineWidth = (isMobile ? 0.8 : 1.2) + rippleBoost * 2;
+          ctx.lineWidth = (isMobile ? 0.8 : 1.0) + rippleBoost;
           ctx.globalAlpha = baseAlpha + rippleBoost;
         } else {
           ctx.strokeStyle = dark ? `rgba(255,255,255,${baseAlpha})` : `rgba(0,0,0,${baseAlpha})`;
@@ -1285,6 +1290,21 @@ function renderSkillsForce(data) {
         const groupDelay = nodeGroup[i] * GROUP_STAGGER;
         const nodeEntryT = Math.max(0, Math.min(1, (now - entryStart - groupDelay) / ENTRY_DURATION));
         alpha = nodeAlpha[i] * easeOutCubic(nodeEntryT);
+      }
+
+      // Ripple node glow — brief halo as wavefront passes
+      if (rippleActive) {
+        const nodeDist = Math.hypot(x - rcx, y - rcy);
+        const distFromWave = Math.abs(nodeDist - rippleR);
+        if (distFromWave < RIPPLE_WIDTH) {
+          const t01 = 1 - distFromWave / RIPPLE_WIDTH;
+          const glowAlpha = t01 * t01 * 0.06;
+          ctx.beginPath();
+          ctx.arc(x, y, DOT_R * scale + 6, 0, Math.PI * 2);
+          ctx.fillStyle = col;
+          ctx.globalAlpha = glowAlpha;
+          ctx.fill();
+        }
       }
 
       // 6. Hover ring (expanding concentric ring)
@@ -1372,21 +1392,25 @@ function renderSkillsForce(data) {
   });
 
   // Listen on window so releasing outside canvas still ends the drag
+  let wasDrag = false;
   window.addEventListener('mouseup', e => {
     if (dragIdx >= 0) {
+      wasDrag = mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5;
       // Check if it was a click (not a drag) to toggle lock
-      if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) <= 5) {
+      if (!wasDrag) {
         lockedIdx = lockedIdx === dragIdx ? -1 : dragIdx;
       }
       dragIdx = -1;
       canvas.style.cursor = hoverIdx >= 0 ? 'pointer' : 'default';
+    } else {
+      wasDrag = false;
     }
     mouseDownPos = null;
   });
 
   // Click on empty space to dismiss lock (mouseup handles node clicks)
   canvas.addEventListener('click', e => {
-    if (mouseDownPos && Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y) > 5) return;
+    if (wasDrag) return;
     const idx = hitTest(e.clientX, e.clientY);
     // Only handle empty-space clicks here; node clicks handled in mouseup
     if (idx < 0) lockedIdx = -1;
