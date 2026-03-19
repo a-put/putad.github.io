@@ -1036,6 +1036,13 @@ function renderSkillsForce(data) {
   let cachedVigDark = null; // vignette gradient cache
   let cachedVig = null;
 
+  // Edge ripple — single wave on first settle
+  let rippleStart = 0;       // timestamp when ripple begins (0 = not started)
+  let rippleFired = false;   // true after ripple has played
+  const RIPPLE_DURATION = 1500; // ms for full expansion
+  const RIPPLE_WIDTH = 80;     // px width of the bright band
+  let rippleMaxR = 0;          // max radius (computed on trigger)
+
   // ── Main render loop ───────────────────────────────────────
   function tick(now) {
     if (!isVisible) { rafId = 0; return; }
@@ -1044,8 +1051,14 @@ function renderSkillsForce(data) {
     if (!entryStart) entryStart = now;
     frameCount++;
 
-    // 3. Reduce to ~30fps when idle (settled, no drag, no hover animation)
-    const isIdle = settled && dragIdx < 0 && effectiveHover() < 0 && entryDone;
+    // Trigger ripple on first frame if already settled (cached positions)
+    if (!rippleFired && !rippleStart && settled && frameCount > 1) {
+      rippleStart = now;
+      rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
+    }
+
+    // 3. Reduce to ~30fps when idle (settled, no drag, no hover, no ripple)
+    const isIdle = settled && dragIdx < 0 && effectiveHover() < 0 && entryDone && !rippleStart;
     if (isIdle && (frameCount & 1)) return; // skip odd frames when idle
 
     // Simulate physics
@@ -1054,7 +1067,14 @@ function renderSkillsForce(data) {
       computeHome();
       if (v < 0.05) {
         settledFrames++;
-        if (settledFrames > 60) { settled = true; cachePositions(); }
+        if (settledFrames > 60) {
+          settled = true; cachePositions();
+          // Trigger ripple on first settle
+          if (!rippleFired) {
+            rippleStart = now;
+            rippleMaxR = Math.hypot(cw / 2, ch / 2) + RIPPLE_WIDTH;
+          }
+        }
       } else settledFrames = 0;
     }
     // If dragging, keep simulating so other nodes react
@@ -1174,22 +1194,47 @@ function renderSkillsForce(data) {
     ctx.fillStyle = cachedVig.l; ctx.fillRect(0, 0, vs, ch);
     ctx.fillStyle = cachedVig.r; ctx.fillRect(cw - vs, 0, vs, ch);
 
+    // Edge ripple progress
+    let rippleR = 0, rippleActive = false;
+    if (rippleStart > 0 && !rippleFired) {
+      const rippleT = (now - rippleStart) / RIPPLE_DURATION;
+      if (rippleT >= 1) {
+        rippleFired = true; rippleStart = 0;
+      } else {
+        rippleActive = true;
+        // Ease-out for decelerating wave
+        rippleR = easeOutCubic(rippleT) * rippleMaxR;
+      }
+    }
+    const rcx = cw / 2, rcy = ch / 2; // ripple center
+
     // Edges — batched: solid (intra-group) first, then dashed (cross-group)
-    // to minimize setLineDash calls
     function drawEdge(e) {
       const [a, b] = allEdges[e];
       const ax = rx[a], ay = ry[a], bx = rx[b], by = ry[b];
       const same = edgeSame[e];
-      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const emx = (ax + bx) / 2, emy = (ay + by) / 2;
       const dx = bx - ax, dy = by - ay;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
       const bulge = len * 0.15 * (1 - edgeTension[e]);
-      const cpx = mx + (-dy / len) * bulge;
-      const cpy = my + (dx / len) * bulge;
+      const cpx = emx + (-dy / len) * bulge;
+      const cpy = emy + (dx / len) * bulge;
 
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.quadraticCurveTo(cpx, cpy, bx, by);
+
+      // Ripple brightness boost for this edge
+      let rippleBoost = 0;
+      if (rippleActive) {
+        const edgeDist = Math.hypot(emx - rcx, emy - rcy);
+        const distFromWave = Math.abs(edgeDist - rippleR);
+        if (distFromWave < RIPPLE_WIDTH) {
+          // Smooth bell curve: brightest at wavefront, fades at edges
+          const t01 = 1 - distFromWave / RIPPLE_WIDTH;
+          rippleBoost = t01 * t01 * 0.35;
+        }
+      }
 
       const t = edgeTension[e];
       if (t > 0.05) {
@@ -1202,13 +1247,20 @@ function renderSkillsForce(data) {
           ctx.strokeStyle = cols[nodes[a].group];
         }
         ctx.lineWidth = 1 + t * 0.4;
-        ctx.globalAlpha = 0.06 + t * 0.14;
+        ctx.globalAlpha = 0.06 + t * 0.14 + rippleBoost;
       } else {
         const dimmed = activeIdx >= 0;
         const baseAlpha = isMobile ? (same ? 0.03 : 0.02) : (same ? 0.06 : 0.04);
-        ctx.strokeStyle = dark ? `rgba(255,255,255,${baseAlpha})` : `rgba(0,0,0,${baseAlpha})`;
-        ctx.lineWidth = isMobile ? (same ? 0.5 : 0.3) : (same ? 0.8 : 0.6);
-        ctx.globalAlpha = dimmed ? 0.3 : 1;
+        if (rippleBoost > 0) {
+          // During ripple, use group color instead of gray
+          ctx.strokeStyle = cols[nodes[a].group];
+          ctx.lineWidth = (isMobile ? 0.8 : 1.2) + rippleBoost * 2;
+          ctx.globalAlpha = baseAlpha + rippleBoost;
+        } else {
+          ctx.strokeStyle = dark ? `rgba(255,255,255,${baseAlpha})` : `rgba(0,0,0,${baseAlpha})`;
+          ctx.lineWidth = isMobile ? (same ? 0.5 : 0.3) : (same ? 0.8 : 0.6);
+          ctx.globalAlpha = dimmed ? 0.3 : 1;
+        }
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
