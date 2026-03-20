@@ -1815,7 +1815,9 @@ function initHeaderParticles(data) {
   const ctx = canvas.getContext('2d');
   const header = canvas.closest('header');
 
-  const COUNT = data.particles?.count ?? 340;
+  const BASE_COUNT = data.particles?.count ?? 340;
+  const initW = window.innerWidth;
+  const COUNT = Math.round(BASE_COUNT * (initW <= 480 ? 0.5 : initW <= 768 ? 0.7 : 1.0));
   const REPEL_RADIUS = data.particles?.repelRadius ?? 90;
   const REPEL_STR = data.particles?.repelStrength ?? 4;
   const SPRING = data.particles?.spring ?? 0.06;
