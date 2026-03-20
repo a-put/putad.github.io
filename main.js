@@ -817,7 +817,7 @@ function renderSkillsForce(data) {
         entryDone = true; // skip entry animation on cached load
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   if (!usedCache) {
     // Init in tight circle by group
@@ -1024,7 +1024,7 @@ function renderSkillsForce(data) {
       const pos = [];
       for (let i = 0; i < N; i++) pos.push([sx[i], sy[i]]);
       sessionStorage.setItem(CACHE_KEY, JSON.stringify(pos));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // ── Performance state ───────────────────────────────────────
@@ -1826,7 +1826,7 @@ function initHeaderParticles(data) {
   const MARGIN = 0.20; // fraction of canvas to extend grid beyond edges
   const DRIFT_AMP = data.particles?.driftAmplitude ?? 20;
   const DRIFT_SPEED = data.particles?.driftSpeed ?? 0.0006;
-  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 200;
+  const RIPPLE_MAX_R = data.particles?.rippleRadius ?? 400;
   const RIPPLE_STR = data.particles?.rippleStrength ?? 7;
   const DOT_REPEL_R = data.particles?.dotRepelRadius ?? 18;
   const DOT_REPEL_STR = data.particles?.dotRepelStr ?? 0.25;
@@ -2649,8 +2649,9 @@ function initHeaderParticles(data) {
     ripples.push({ x: clientX - canvasRect.left, y: clientY - canvasRect.top, r: 0, str: RIPPLE_STR });
   }
 
+  let headerRafId = 0;
   function tick() {
-    if (document.hidden) return;
+    if (document.hidden) { headerRafId = 0; return; }
     t = (t + DRIFT_SPEED) % (Math.PI * 2000);
     pulseT += PULSE_WANDER_SPEED;
     const now = performance.now();
@@ -3162,7 +3163,7 @@ function initHeaderParticles(data) {
     tickCat(W, H);
     drawCat(ctx, H);
 
-    requestAnimationFrame(tick);
+    headerRafId = requestAnimationFrame(tick);
   }
 
   // Burst dots outward from cursor — called on gravity-well release
@@ -3262,7 +3263,7 @@ function initHeaderParticles(data) {
   });
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) requestAnimationFrame(tick);
+    if (!document.hidden && !headerRafId) headerRafId = requestAnimationFrame(tick);
   });
 
   // Initial setup — run immediately, not debounced
