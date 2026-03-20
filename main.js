@@ -12,6 +12,8 @@ fetch('data.json')
     renderMedia(data);
     setupContact(data);
     document.getElementById('footer-name').textContent = `© ${new Date().getFullYear()} ${data.name}`;
+    // Re-measure header after content is rendered
+    initTabs();
   });
 
 // ── Tab switching / mobile scroll-spy ─────────────────────────
