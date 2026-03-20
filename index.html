@@ -9,12 +9,15 @@
   <title>Anton Putintsev, PhD</title>
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
-  <!-- Anti-flash: must run before first paint -->
+  <!-- Anti-flash + standalone detect: must run before first paint -->
   <script>
     (function () {
       var t = localStorage.getItem('cv-theme');
       if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.setAttribute('data-theme', 'dark');
+      }
+      if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+        document.documentElement.classList.add('standalone');
       }
     }());
   </script>

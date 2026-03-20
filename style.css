@@ -1546,15 +1546,16 @@ html[data-theme="dark"] #icon-moon {
 }
 
 /* ── iOS standalone webapp fix ──────────────────────────── */
-@media (max-width: 768px) and (display-mode: standalone) {
-  header {
+/* .standalone class is set by JS for reliable iOS detection */
+@media (max-width: 768px) {
+  .standalone header {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
   }
 
-  .sidebar {
+  .standalone .sidebar {
     position: fixed;
     top: var(--header-h, 0px);
     left: 0;
@@ -1562,7 +1563,7 @@ html[data-theme="dark"] #icon-moon {
     z-index: 90;
   }
 
-  main {
+  .standalone main {
     padding-top: calc(var(--header-h, 0px) + var(--nav-h, 44px));
   }
 }
