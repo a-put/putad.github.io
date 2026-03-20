@@ -26,8 +26,9 @@
   <header class="py-10 px-6">
     <canvas id="header-canvas" aria-hidden="true"></canvas>
     <div style="max-width: 900px; margin: 0 auto; padding: 0 1.5rem;" class="flex items-center gap-6">
-      <img id="avatar" src="assets/avatar.jpg" alt="Profile photo" class="w-32 h-32 object-cover flex-shrink-0"
-        style="box-shadow: var(--shadow-sm); border-radius: 14px;" />
+      <div id="avatar-frame" class="flex-shrink-0">
+        <img id="avatar" src="assets/avatar.jpg" alt="Profile photo" class="object-cover" />
+      </div>
       <div>
         <h1 id="header-name" class="font-bold"
           style="letter-spacing: -0.03em; color: var(--text-primary);"></h1>
@@ -158,7 +159,8 @@
 
   <!-- Avatar lightbox -->
   <div id="avatar-lightbox" role="dialog" aria-modal="true" aria-label="Profile photo enlarged">
-    <img src="assets/avatar.jpg" alt="Profile photo enlarged" />
+    <div class="lb-backdrop"></div>
+    <img class="lb-img" src="assets/avatar.jpg" alt="Profile photo enlarged" />
   </div>
 
   <button id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
@@ -184,10 +186,90 @@
 
   <script src="main.js?v=5"></script>
   <script>
-    const lb = document.getElementById('avatar-lightbox');
-    document.getElementById('avatar').addEventListener('click', () => lb.classList.add('open'));
-    lb.addEventListener('click', () => lb.classList.remove('open'));
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') lb.classList.remove('open'); });
+    (function () {
+      const lb = document.getElementById('avatar-lightbox');
+      const lbImg = lb.querySelector('.lb-img');
+      const avatar = document.getElementById('avatar');
+      const frame = document.getElementById('avatar-frame');
+      let isOpen = false;
+      let isAnimating = false;
+
+      function openLightbox() {
+        if (isOpen || isAnimating) return;
+        isAnimating = true;
+
+        // First: measure avatar's current position
+        const rect = avatar.getBoundingClientRect();
+        const style = getComputedStyle(avatar);
+        const br = parseFloat(style.borderRadius) || 14;
+
+        // Position the lightbox image exactly over the avatar
+        lbImg.style.top = rect.top + 'px';
+        lbImg.style.left = rect.left + 'px';
+        lbImg.style.width = rect.width + 'px';
+        lbImg.style.height = rect.height + 'px';
+        lbImg.style.borderRadius = br + 'px';
+
+        // Hide original avatar, show lightbox (no transition yet)
+        frame.classList.add('lb-active');
+        lb.classList.add('open');
+
+        // Last: compute target position (centered, enlarged)
+        const targetSize = Math.min(window.innerWidth * 0.7, window.innerHeight * 0.7, 420);
+        const targetTop = (window.innerHeight - targetSize) / 2;
+        const targetLeft = (window.innerWidth - targetSize) / 2;
+
+        // Invert + Play: enable transitions then move to target
+        requestAnimationFrame(() => {
+          lb.classList.add('animating');
+          requestAnimationFrame(() => {
+            lbImg.style.top = targetTop + 'px';
+            lbImg.style.left = targetLeft + 'px';
+            lbImg.style.width = targetSize + 'px';
+            lbImg.style.height = targetSize + 'px';
+            lbImg.style.borderRadius = '22px';
+            isOpen = true;
+            isAnimating = false;
+          });
+        });
+      }
+
+      function closeLightbox() {
+        if (!isOpen || isAnimating) return;
+        isAnimating = true;
+
+        // Animate back to avatar's current position
+        const rect = avatar.getBoundingClientRect();
+        const style = getComputedStyle(avatar);
+        const br = parseFloat(style.borderRadius) || 14;
+
+        lbImg.style.top = rect.top + 'px';
+        lbImg.style.left = rect.left + 'px';
+        lbImg.style.width = rect.width + 'px';
+        lbImg.style.height = rect.height + 'px';
+        lbImg.style.borderRadius = br + 'px';
+
+        lb.classList.remove('open');
+
+        const cleanup = () => {
+          lb.classList.remove('animating');
+          frame.classList.remove('lb-active');
+          isOpen = false;
+          isAnimating = false;
+        };
+        lbImg.addEventListener('transitionend', function done(e) {
+          if (e.propertyName !== 'width') return;
+          lbImg.removeEventListener('transitionend', done);
+          clearTimeout(fallback);
+          cleanup();
+        });
+        const fallback = setTimeout(cleanup, 500);
+      }
+
+      document.getElementById('avatar-frame').addEventListener('click', openLightbox);
+      lb.addEventListener('click', closeLightbox);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+    })();
   </script>
 </body>
 
